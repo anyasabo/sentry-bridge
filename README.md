@@ -158,15 +158,15 @@ These are intentional product decisions, not bugs:
 ### 1. PrusaLink auth fails (401)
 
 - Symptom: Wizard step 1 fails with 401 Unauthorized
-- Check URL has no trailing slash: `http://192.168.x.x` not `http://192.168.x.x/`
+- Check URL has no trailing slash: `http://<printer-ip>` not `http://<printer-ip>/`
 - Verify credentials in PrusaLink: Settings → Network → API Key / User Password
-- Test from host: `curl -u <username>:<password> --digest http://192.168.x.x/api/v1/status`
+- Test from host: `curl -u <username>:<password> --digest http://<printer-ip>/api/v1/status`
 
 ### 2. Camera RTSP unreachable
 
 - Symptom: Wizard step 2 blocks, no frame preview
 - Confirm printer has a camera (Buddy3D board) and RTSP is enabled
-- Test from host: `ffmpeg -rtsp_transport tcp -i rtsp://192.168.x.x/live -frames:v 1 -f image2 test.jpg`
+- Test from host: `ffmpeg -rtsp_transport tcp -i rtsp://<printer-ip>/live -frames:v 1 -f image2 test.jpg`
 - Check LAN: printer and Docker host on the same subnet, no VLAN isolation
 
 ### 3. Obico pairing never confirms

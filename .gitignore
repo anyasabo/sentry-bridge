@@ -9,11 +9,14 @@ scripts/poc/node_modules/
 !/config/config.example.json
 *.log
 reports/
-.claude/settings.local.json
-.claude/worktrees/
 node_modules
 
-# GSD local state
-.planning/config.json
-.planning/.next-call-count
-.planning/.continue-here.md
+# GSD / planning workspace (never commit to public repo)
+.planning/
+
+# AI coding assistant configs (local tooling, not for contributors)
+.claude/
+.codex/
+.cursor/
+.windsurf/
+.github/copilot/
