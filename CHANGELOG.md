@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-04-13
+
+Milestone 3: Print & Files (Phases 13–15)
+
+### Added
+
+- **Dashboard File Browser** — browse G-code files from PrusaLink directly in the Obico dashboard; file list with name, size, and date; one-click print start (#48)
+- **Resume bug fix** — `current_print_ts` stabilized; paused state included in forwarded status so Obico correctly reflects pause/resume transitions (#79)
+- **Command message handling** — support for `commands[]` message format for pause/resume/cancel control (#79)
+
+### Fixed
+
+- Resume command not forwarded correctly when printer was in paused state
+- `current_print_ts` changed on every status poll causing Obico to treat each poll as a new print
+- `commands[]` array format not handled in Obico agent command dispatcher
+
+---
+
 ## [1.0.0] - 2026-04-07
 
 First production-ready release. Covers Milestone 1 (Working Bridge) and Milestone 2 (Production-Ready).

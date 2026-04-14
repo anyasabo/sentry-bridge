@@ -1,0 +1,752 @@
+openapi: "3.0.3"
+info:
+  title: SentryBridge REST API
+  description: >
+    REST API for SentryBridge — a Docker service that bridges Prusa printers (via PrusaLink)
+    to Obico. This API is consumed by the React web UI and by the Obico http.tunnelv2 passthru handler.
+  version: "1.1.0"
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local Docker container (default port)
+
+tags:
+  - name: health
+    description: Health and readiness probes
+  - name: config
+    description: Configuration management
+  - name: status
+    description: Live printer and bridge status
+  - name: control
+    description: Printer control actions
+  - name: files
+    description: G-code file management (OctoPrint-compatible)
+  - name: wizard
+    description: Setup wizard steps
+  - name: stream
+    description: Camera streaming
+
+paths:
+  /api/health/:
+    get:
+      tags: [health]
+      summary: Detailed health status
+      description: Returns per-component health state and circuit breaker stats. Always returns 200.
+      operationId: getHealth
+      responses:
+        "200":
+          description: Health status for all components
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/health/live:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      description: Docker HEALTHCHECK target. Returns 200 if the process is running.
+      operationId: getLiveness
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/health/ready:
+    get:
+      tags: [health]
+      summary: Readiness probe
+      description: Returns 503 when a critical component has been DOWN for longer than HEALTHCHECK_CRITICAL_TIMEOUT_MS (default 120s).
+      operationId: getReadiness
+      responses:
+        "200":
+          description: Bridge is ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+        "503":
+          description: Critical component is down
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+
+  /api/config:
+    get:
+      tags: [config]
+      summary: Read current configuration
+      description: Returns the current config.json contents. Returns 404 if not yet configured.
+      operationId: getConfig
+      responses:
+        "200":
+          description: Current configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Config"
+        "404":
+          description: Not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/setup/save:
+    post:
+      tags: [config]
+      summary: Save configuration and restart bridge
+      description: Writes config.json and triggers bridge hot-reload. Requires all required fields.
+      operationId: saveConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Config"
+      responses:
+        "200":
+          description: Configuration saved and bridge restarted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "400":
+          description: Missing required config fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/status/stream:
+    get:
+      tags: [status]
+      summary: SSE stream of printer and bridge status
+      description: Server-Sent Events stream. Each event is of type `status` and contains printer state, job info, and component health.
+      operationId: getStatusStream
+      responses:
+        "200":
+          description: SSE stream (text/event-stream)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: "SSE events: `event: status\\ndata: {StatusEvent}\\n\\n`"
+
+  /api/printer/info:
+    get:
+      tags: [status]
+      summary: Get printer name
+      description: Returns the printer's display name from config, or hostname from PrusaLink if not set.
+      operationId: getPrinterInfo
+      responses:
+        "200":
+          description: Printer info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: prusa-core-one
+        "502":
+          description: PrusaLink unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/camera/snapshot:
+    get:
+      tags: [status]
+      summary: Camera snapshot
+      description: Captures a single JPEG frame from the RTSP stream via ffmpeg. Returns the raw JPEG image.
+      operationId: getCameraSnapshot
+      responses:
+        "200":
+          description: JPEG image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "502":
+          description: Camera stream unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/control:
+    post:
+      tags: [control]
+      summary: Printer control action
+      description: Pause, resume, or cancel the active print via PrusaLink.
+      operationId: control
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [pause, resume, cancel]
+                  example: pause
+      responses:
+        "200":
+          description: Action executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "400":
+          description: Invalid action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: PrusaLink unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/bridge/reconnect:
+    post:
+      tags: [control]
+      summary: Reconnect a bridge component
+      description: Triggers a manual reconnect for prusalink, obico, or camera. Used by the dashboard health card reconnect buttons.
+      operationId: reconnect
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [component]
+              properties:
+                component:
+                  type: string
+                  enum: [prusalink, obico, camera]
+                  example: prusalink
+      responses:
+        "200":
+          description: Reconnect triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "400":
+          description: Invalid component
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Reconnect failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/wizard/test-prusalink:
+    post:
+      tags: [wizard]
+      summary: Test PrusaLink connection
+      description: Attempts to connect to a PrusaLink instance with the given credentials. Used in wizard step 1.
+      operationId: testPrusaLink
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, username, password]
+              properties:
+                url:
+                  type: string
+                  example: http://192.168.1.100
+                username:
+                  type: string
+                  example: maker
+                password:
+                  type: string
+                  example: yourpassword
+      responses:
+        "200":
+          description: Connection successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "400":
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/wizard/test-camera:
+    post:
+      tags: [wizard]
+      summary: Test RTSP camera stream
+      description: Captures a test frame from the RTSP stream. Returns the frame as base64 JPEG. Used in wizard step 2.
+      operationId: testCamera
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rtspUrl]
+              properties:
+                rtspUrl:
+                  type: string
+                  example: rtsp://192.168.1.100/live
+      responses:
+        "200":
+          description: Frame captured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  frame:
+                    type: string
+                    description: Base64-encoded JPEG frame
+        "400":
+          description: Missing rtspUrl
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: RTSP stream unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/wizard/verify-pairing:
+    post:
+      tags: [wizard]
+      summary: Verify Obico pairing code
+      description: Verifies the 5-character pairing code with the Obico server and returns the API key. Used in wizard step 3.
+      operationId: verifyPairing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [obicoServerUrl, code]
+              properties:
+                obicoServerUrl:
+                  type: string
+                  example: https://app.obico.io
+                code:
+                  type: string
+                  example: AB12C
+      responses:
+        "200":
+          description: Pairing successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKey:
+                    type: string
+                    description: 20-character hex auth token
+                  serverUrl:
+                    type: string
+        "400":
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Pairing code expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Obico server unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: Pairing timed out (120s deadline exceeded)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/wizard/configured:
+    get:
+      tags: [wizard]
+      summary: Check if bridge is configured
+      description: Returns whether config.json exists and all required fields are present.
+      operationId: isConfigured
+      responses:
+        "200":
+          description: Configuration status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured:
+                    type: boolean
+                    example: true
+
+  /api/files/:
+    get:
+      tags: [files]
+      summary: List G-code files
+      description: Lists files on PrusaLink USB storage in OctoPrint-compatible format. Used by Obico's file browser (http.tunnelv2 passthru).
+      operationId: listFiles
+      responses:
+        "200":
+          description: File list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileListResponse"
+        "502":
+          description: PrusaLink unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    post:
+      tags: [files]
+      summary: Upload G-code file
+      description: Uploads a G-code file to PrusaLink USB storage. Max 200 MB. Uses multer diskStorage to avoid OOM.
+      operationId: uploadFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: G-code file (.gcode)
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  name:
+                    type: string
+                    example: benchy.gcode
+        "400":
+          description: No file provided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: PrusaLink unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/files/{filename}/print:
+    post:
+      tags: [files]
+      summary: Start printing a file
+      description: Starts printing the specified G-code file on PrusaLink.
+      operationId: startPrint
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+          example: benchy.gcode
+      responses:
+        "200":
+          description: Print started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "502":
+          description: PrusaLink unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/files/{filename}:
+    delete:
+      tags: [files]
+      summary: Delete a G-code file
+      description: Deletes the specified file from PrusaLink USB storage.
+      operationId: deleteFile
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+          example: benchy.gcode
+      responses:
+        "200":
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "502":
+          description: PrusaLink unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /stream/mjpeg:
+    get:
+      tags: [stream]
+      summary: MJPEG live stream
+      description: Continuous Motion JPEG stream from the RTSP camera. Used as fallback when WebRTC is unavailable.
+      operationId: getMjpegStream
+      responses:
+        "200":
+          description: MJPEG stream (multipart/x-mixed-replace)
+          content:
+            multipart/x-mixed-replace:
+              schema:
+                type: string
+                format: binary
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Connection failed
+
+    Config:
+      type: object
+      required: [prusalink, camera, obico]
+      properties:
+        name:
+          type: string
+          description: Optional printer display name
+          example: My Core One
+        prusalink:
+          type: object
+          required: [url, username, password]
+          properties:
+            url:
+              type: string
+              example: http://192.168.1.100
+            username:
+              type: string
+              example: maker
+            password:
+              type: string
+              example: yourpassword
+        camera:
+          type: object
+          required: [rtspUrl]
+          properties:
+            rtspUrl:
+              type: string
+              example: rtsp://192.168.1.100/live
+            frameIntervalSeconds:
+              type: number
+              default: 2
+              example: 2
+        obico:
+          type: object
+          required: [serverUrl, apiKey]
+          properties:
+            serverUrl:
+              type: string
+              example: https://app.obico.io
+            apiKey:
+              type: string
+              description: 20-character hex auth token from pairing
+              example: a3f8c2d1e4b5f6a7c8d9e0f1
+        polling:
+          type: object
+          properties:
+            statusIntervalMs:
+              type: integer
+              default: 5000
+              example: 5000
+        shutdown:
+          type: object
+          properties:
+            ffmpegKillTimeoutSeconds:
+              type: integer
+              default: 3
+              example: 3
+
+    HealthResponse:
+      type: object
+      properties:
+        overall:
+          type: string
+          enum: [healthy, degraded, down]
+        components:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ComponentHealth"
+
+    ComponentHealth:
+      type: object
+      properties:
+        state:
+          type: string
+          enum: [healthy, degraded, down]
+        stateSince:
+          type: string
+          format: date-time
+        restartCount:
+          type: integer
+        lastErrors:
+          type: array
+          items:
+            type: string
+        circuitBreaker:
+          type: object
+          properties:
+            state:
+              type: string
+              enum: [closed, open, half-open]
+            failures:
+              type: integer
+            lastFailure:
+              type: string
+              format: date-time
+
+    ReadinessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, down, critical]
+        components:
+          type: object
+          additionalProperties:
+            type: string
+
+    OctoPrintFile:
+      type: object
+      properties:
+        name:
+          type: string
+          example: benchy.gcode
+        display:
+          type: string
+          example: benchy_0.2mm_PETG.gcode
+        path:
+          type: string
+          example: /usb/
+        type:
+          type: string
+          example: machinecode
+        size:
+          type: integer
+          example: 1048576
+        date:
+          type: integer
+          description: Unix timestamp
+        origin:
+          type: string
+          example: local
+        refs:
+          type: object
+          properties:
+            resource:
+              type: string
+            download:
+              type: string
+        gcodeAnalysis:
+          type: object
+          properties:
+            estimatedPrintTime:
+              type: integer
+              nullable: true
+
+    FileListResponse:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/OctoPrintFile"
+        free:
+          type: integer
+          description: Free space in bytes
+        total:
+          type: integer
+          description: Total space in bytes

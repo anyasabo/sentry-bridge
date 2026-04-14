@@ -1,7 +1,9 @@
 # obico-prusalink-bridge
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/reneleban/obico-prusalink-bridge.svg)](https://hub.docker.com/r/reneleban/obico-prusalink-bridge)
-[![CI](https://img.shields.io/github/actions/workflow/status/reneleban/obico-prusalink-bridge/docker-publish.yml?branch=main&label=CI)](https://github.com/reneleban/obico-prusalink-bridge/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/reneleban/sentry-bridge/ci.yml?branch=main&label=CI)](https://github.com/reneleban/sentry-bridge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Docker Image Version](https://img.shields.io/docker/v/reneleban/sentry-bridge?label=Docker)](https://hub.docker.com/r/reneleban/sentry-bridge)
+[![Node.js 22](https://img.shields.io/badge/Node.js-22-green.svg)](https://nodejs.org)
 
 Standalone Docker service that connects Prusa Core One printers (via PrusaLink) to Obico (self-hosted or cloud). Runs as an Obico agent — no modifications to Obico or PrusaLink required. One container = one printer.
 
@@ -42,6 +44,8 @@ docker run -d \
 ```
 
 Replace `192.168.1.x` with the LAN IP of the machine running Docker. Without this, the WebRTC live stream will not work.
+
+For the full guide → [docs/guide/](docs/guide/)
 
 ## Docker Compose
 

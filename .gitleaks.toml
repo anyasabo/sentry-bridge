@@ -1,0 +1,16 @@
+title = "SentryBridge gitleaks config"
+
+[allowlist]
+description = "Known false positives — placeholder values in documentation and test fixtures"
+
+regexes = [
+  # Placeholder API key in docs/spec/04-interfaces.md — example value only
+  "a3f8c2d1e4b5f6a7c8d9e0f1",
+  # Fake auth tokens in docs/testing/03-test-cases.md — test fixture data
+  "abc123def456abc123de",
+]
+
+paths = [
+  # Planning files (gitignored, internal workflow artifacts)
+  ".planning/",
+]
