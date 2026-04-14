@@ -1,4 +1,4 @@
-# obico-prusalink-bridge
+# SentryBridge
 
 [![CI](https://img.shields.io/github/actions/workflow/status/reneleban/sentry-bridge/ci.yml?branch=main&label=CI)](https://github.com/reneleban/sentry-bridge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
@@ -36,7 +36,7 @@ docker run -d \
   -p 10100-10200:10100-10200/udp \
   -v ./config:/config \
   -e JANUS_HOST_IP=192.168.1.x \
-  reneleban/obico-prusalink-bridge:latest
+  reneleban/sentry-bridge:latest
 ```
 
 ```bash
@@ -54,7 +54,7 @@ For persistent setups, use the included `docker-compose.yml` at the repo root, o
 ```yaml
 services:
   bridge:
-    image: reneleban/obico-prusalink-bridge:latest
+    image: reneleban/sentry-bridge:latest
     container_name: prubico_bridge
     ports:
       - "3000:3000"
@@ -201,8 +201,8 @@ For local development or custom builds:
 ### Setup
 
 ```bash
-git clone https://github.com/reneleban/obico-prusalink-bridge.git
-cd obico-prusalink-bridge
+git clone https://github.com/reneleban/sentry-bridge.git
+cd sentry-bridge
 npm run install:all
 ```
 
