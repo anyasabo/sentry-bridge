@@ -8,14 +8,15 @@ SentryBridge sits between three external actors: the Prusa printer (PrusaLink), 
 graph LR
     Browser["User Browser\n(Web UI :3000)"]
     Bridge["SentryBridge\n(Docker Container)"]
-    Printer["Prusa Printer\n(PrusaLink HTTP API)"]
+    Printer["Prusa Printer\n(PrusaLink + Camera)"]
     Obico["Obico Server\n(WebSocket + HTTP)"]
 
     Browser -- "HTTP / WebSocket\n(Dashboard, Wizard, Stream)" --> Bridge
     Bridge -- "HTTP Digest Auth\n(status, job, pause/resume/cancel)" --> Printer
+    Printer -- "RTSP (unauthenticated)\n(camera stream)" --> Bridge
     Bridge -- "WebSocket (OctoPrint protocol)\n(status, frames, commands)" --> Obico
     Obico -- "Control commands\n(pause, cancel, start)" --> Bridge
-    Bridge -- "JPEG snapshots\nHTTP POST /api/v1/octo/pic/" --> Obico
+    Bridge -- "video frames\nHTTP POST /api/v1/octo/pic/" --> Obico
 ```
 
 ## External Interfaces

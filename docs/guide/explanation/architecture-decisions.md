@@ -2,8 +2,6 @@
 
 This page explains four design decisions that shape how SentryBridge works. It is written for users who want to understand the system, not just operate it.
 
-If you are looking for step-by-step instructions, see the [How-To guides](../how-to/). If you want a high-level overview, start with the [Introduction](../tutorials/getting-started.md).
-
 ---
 
 ## 1. Why Docker — no native installer
@@ -53,9 +51,5 @@ Starting from firmware released in April 2026, Prusa printers default to WebRTC 
 When you switch the camera protocol to RTSP in PrusaLink settings (`Settings → Network → Camera`), you are not disabling anything — you are making the stream available on the standard local endpoint that SentryBridge (and tools like ffmpeg, VLC, and Home Assistant) use. Prusa Connect continues to work regardless of this setting.
 
 ---
-
-## Further reading
-
-These decisions are not permanent — they represent the best trade-offs at the time SentryBridge was designed. If Obico adds first-class support for non-OctoPrint agents, or if Prusa exposes a stable LAN WebRTC endpoint, the relevant decisions will be revisited.
 
 *Back to [User Guide](../README.md)*

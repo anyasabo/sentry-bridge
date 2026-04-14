@@ -9,7 +9,7 @@
 | R-03 | RTSP stream unavailable after Prusa firmware update (WebRTC-only mode) | Medium     | High   | Newer Prusa firmware defaults to WebRTC streaming mode. Users must manually switch to RTSP in Prusa Connect settings. Document in setup guide.               |
 | R-04 | No API authentication on REST endpoints                                | Medium     | Medium | LAN-only deployment mitigates external exposure. Risk accepted for current version. Planned for a future milestone (API Basic Auth or token) — see issue #6. |
 | R-05 | Config stored in plaintext JSON including credentials                  | Medium     | Medium | LAN-only deployment reduces risk. Future: consider config encryption at rest.                                                                                |
-| R-06 | ffmpeg process leak on RTSP timeout                                    | Low        | Medium | `testStream()` has a timeout guard. The camera circuit breaker tracks failures. Monitored via health endpoint.                                               |
+| R-06 | ffmpeg process leak on RTSP timeout                                    | Low        | Medium | `testStream()` has a timeout guard. The camera Circuit Breaker tracks failures. Monitored via health endpoint.                                               |
 
 ## Technical Debt
 
