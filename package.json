@@ -14,7 +14,7 @@
     "build:all": "npm run build:backend && npm run build:frontend",
     "start:backend": "node dist/index.js",
     "start:all": "npm run build:all && npm run start:backend",
-    "test:backend": "jest",
+    "test:backend": "jest --forceExit",
     "test:all": "npm run test:backend",
     "typecheck": "tsc --noEmit",
     "build:docker": "docker build -t obico-prusalink-bridge .",
