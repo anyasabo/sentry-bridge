@@ -9,7 +9,7 @@ on:
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       checks: write
@@ -37,7 +37,7 @@ jobs:
           reporter: jest-junit
 
   docker-build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'pull_request'
     steps:
