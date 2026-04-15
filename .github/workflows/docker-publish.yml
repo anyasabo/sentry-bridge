@@ -21,7 +21,7 @@ jobs:
       - name: Compute tags
         id: meta
         run: |
-          echo "tags=reneleban/sentry-bridge:${GITHUB_REF_NAME},reneleban/sentry-bridge:latest" >> $GITHUB_OUTPUT
+          echo "tags=rleban/sentry-bridge:${GITHUB_REF_NAME},rleban/sentry-bridge:latest" >> $GITHUB_OUTPUT
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -30,4 +30,4 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=registry,ref=reneleban/sentry-bridge:buildcache
+          cache-from: type=registry,ref=rleban/sentry-bridge:buildcache

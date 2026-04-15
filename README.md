@@ -1,8 +1,8 @@
 # SentryBridge
 
-[![CI](https://img.shields.io/github/actions/workflow/status/reneleban/sentry-bridge/ci.yml?branch=main&label=CI)](https://github.com/reneleban/sentry-bridge/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/rleban/sentry-bridge/ci.yml?branch=main&label=CI)](https://github.com/rleban/sentry-bridge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Docker Image Version](https://img.shields.io/docker/v/reneleban/sentry-bridge?label=Docker)](https://hub.docker.com/r/reneleban/sentry-bridge)
+[![Docker Image Version](https://img.shields.io/docker/v/rleban/sentry-bridge?label=Docker)](https://hub.docker.com/r/rleban/sentry-bridge)
 [![Node.js 22](https://img.shields.io/badge/Node.js-22-green.svg)](https://nodejs.org)
 
 Standalone Docker service that connects Prusa Core One printers (via PrusaLink) to Obico (self-hosted or cloud). Runs as an Obico agent — no modifications to Obico or PrusaLink required. One container = one printer.
@@ -36,7 +36,7 @@ docker run -d \
   -p 10100-10200:10100-10200/udp \
   -v ./config:/config \
   -e JANUS_HOST_IP=192.168.1.x \
-  reneleban/sentry-bridge:latest
+  rleban/sentry-bridge:latest
 ```
 
 ```bash
@@ -54,7 +54,7 @@ For persistent setups, use the included `docker-compose.yml` at the repo root, o
 ```yaml
 services:
   bridge:
-    image: reneleban/sentry-bridge:latest
+    image: rleban/sentry-bridge:latest
     container_name: prubico_bridge
     ports:
       - "3000:3000"
@@ -201,7 +201,7 @@ For local development or custom builds:
 ### Setup
 
 ```bash
-git clone https://github.com/reneleban/sentry-bridge.git
+git clone https://github.com/rleban/sentry-bridge.git
 cd sentry-bridge
 npm run install:all
 ```
