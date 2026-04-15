@@ -1,6 +1,6 @@
 # SentryBridge
 
-[![CI](https://img.shields.io/github/actions/workflow/status/rleban/sentry-bridge/ci.yml?branch=main&label=CI)](https://github.com/rleban/sentry-bridge/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/reneleban/sentry-bridge/ci.yml?branch=main&label=CI)](https://github.com/reneleban/sentry-bridge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Docker Image Version](https://img.shields.io/docker/v/rleban/sentry-bridge?label=Docker)](https://hub.docker.com/r/rleban/sentry-bridge)
 [![Node.js 22](https://img.shields.io/badge/Node.js-22-green.svg)](https://nodejs.org)
@@ -201,7 +201,7 @@ For local development or custom builds:
 ### Setup
 
 ```bash
-git clone https://github.com/rleban/sentry-bridge.git
+git clone https://github.com/reneleban/sentry-bridge.git
 cd sentry-bridge
 npm run install:all
 ```
