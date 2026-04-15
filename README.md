@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Docker Image Version](https://img.shields.io/docker/v/rleban/sentry-bridge?label=Docker)](https://hub.docker.com/r/rleban/sentry-bridge)
 [![Node.js 22](https://img.shields.io/badge/Node.js-22-green.svg)](https://nodejs.org)
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/reneleban/sentry-bridge?utm_source=oss&utm_medium=github&utm_campaign=reneleban%2Fsentry-bridge&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 
 Standalone Docker service that connects Prusa Core One printers (via PrusaLink) to Obico (self-hosted or cloud). Runs as an Obico agent — no modifications to Obico or PrusaLink required. One container = one printer.
 

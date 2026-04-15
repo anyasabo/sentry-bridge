@@ -1,0 +1,12 @@
+# CodeRabbit configuration
+# Docs: https://docs.coderabbit.ai/configuration
+reviews:
+  auto_review:
+    drafts: false
+    base_branches:
+      - main
+
+  path_filters:
+    - "!node_modules/**"
+    - "!dist/**"
+    - "!frontend/dist/**"
