@@ -2,9 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Hard Rules
+
+- **Never commit `.planning/` or `.claude/`** — these are local workspace directories, gitignored for a reason. No plugin, workflow, or automation overrides this.
+- **Always sync with GitHub Issues** — before starting any task, check open issues. Work must map to an issue. Close issues via PR description (`Closes #N`).
+- **Project language is English** — all code, comments, commit messages, PR titles, issue titles, and documentation must be in English.
+
 ## Project Overview
 
-`obico-prusalink-bridge` is a standalone Docker service that connects Prusa Core One printers (via PrusaLink) to Obico (self-hosted or cloud). It acts as an Obico agent — no modifications to Obico or PrusaLink required.
+**SentryBridge** is a standalone Docker service that connects Prusa Core One printers (via PrusaLink) to Obico (self-hosted or cloud). It acts as an Obico agent — no modifications to Obico or PrusaLink required.
+
+- GitHub: `https://github.com/reneleban/sentry-bridge`
+- Docker Hub: `rleban/sentry-bridge`
 
 One container instance = one printer.
 
@@ -73,13 +82,12 @@ npm run build:all            # both sequentially (used in Docker)
 npm run start:backend        # run compiled Express server
 npm run start:all            # build:all + start:backend
 
-# POC validation — self-contained, run from scripts/poc/
-# cd scripts/poc && npm install
-OBICO_URL=http://192.168.1.x:3334 npm run obico       # validate Obico agent protocol
-
-# Docker
+# Docker (local)
 npm run build:docker               # build image locally (single platform)
 npm run build:docker:multiplatform # build for amd64 + arm64 (requires buildx)
+
+# Janus WebRTC sidecar (Mac / dev only)
+docker compose -f docker-compose.dev.yml up -d
 
 # Tests
 npm run test:backend         # backend unit tests
@@ -91,12 +99,27 @@ npm run test:backend -- --watch  # watch mode
 
 ## Git Workflow
 
-- Default branch is `main` (set globally: `git config --global init.defaultBranch main`)
-- GSD manages branches automatically per phase: `gsd/phase-{N}-{slug}` (e.g. `gsd/phase-9-documentation`)
-- Never commit directly to `main`
+- Default branch is `main`
+- Branch naming: `type/short-description` (e.g. `feat/file-browser`, `fix/resume-state`)
+- Never commit directly to `main` — branch protection requires a PR and passing CI
 - Claude opens the PR, the user reviews and merges
 - PR title format: `feat(#N): short description`
 - Close the issue via PR description: `Closes #N`
+
+## CI/CD
+
+| Workflow             | Trigger                                    | Runner                                  |
+| -------------------- | ------------------------------------------ | --------------------------------------- |
+| `ci.yml`             | push/PR to `main`, manual                  | `ubuntu-latest` (free for public repos) |
+| `docker-publish.yml` | manual on version tag only (`vX.Y.Z`)      | self-hosted (required for ARM build)    |
+| `security.yml`       | push/PR to `main`, weekly Monday 06:00 UTC | `ubuntu-latest`                         |
+
+## Release Process
+
+1. Merge all changes to `main` via PR
+2. Create GitHub release: `gh release create vX.Y.Z --title "vX.Y.Z" --target main`
+3. Trigger Docker publish: `gh workflow run docker-publish.yml --ref vX.Y.Z`
+4. Docker Hub description is updated automatically by the publish workflow
 
 ## Testing
 
