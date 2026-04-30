@@ -4,15 +4,17 @@ Architecture decisions are recorded as Architecture Decision Records (ADRs) in M
 
 ## ADR Index
 
-| ID                                                            | Title                                                       | Status   | Date       |
-| ------------------------------------------------------------- | ----------------------------------------------------------- | -------- | ---------- |
-| [ADR-0001](../decisions/ADR-0001-docker-single-container.md)  | Docker Single-Container Model (One Container = One Printer) | Accepted | 2026-04-13 |
-| [ADR-0002](../decisions/ADR-0002-octoprint-agent-identity.md) | OctoPrint Agent Identity for Obico WebSocket                | Accepted | 2026-04-13 |
-| [ADR-0003](../decisions/ADR-0003-http-digest-auth.md)         | HTTP Digest Authentication for PrusaLink API                | Accepted | 2026-04-13 |
-| [ADR-0004](../decisions/ADR-0004-rtsp-ffmpeg-camera.md)       | RTSP Camera Stream via ffmpeg                               | Accepted | 2026-04-13 |
-| [ADR-0005](../decisions/ADR-0005-circuit-breaker-pattern.md)  | Circuit Breaker Pattern for External Component Resilience   | Accepted | 2026-04-13 |
-| [ADR-0006](../decisions/ADR-0006-config-on-volume.md)         | Configuration Stored as JSON File on Docker Volume          | Accepted | 2026-04-13 |
-| [ADR-0007](../decisions/ADR-0007-mit-license.md)              | MIT License for Open-Source Release                         | Accepted | 2026-04-13 |
+| ID                                                            | Title                                                               | Status   | Date       |
+| ------------------------------------------------------------- | ------------------------------------------------------------------- | -------- | ---------- |
+| [ADR-0001](../decisions/ADR-0001-docker-single-container.md)  | Docker Single-Container Model (One Container = One Printer)         | Accepted | 2026-04-13 |
+| [ADR-0002](../decisions/ADR-0002-octoprint-agent-identity.md) | OctoPrint Agent Identity for Obico WebSocket                        | Accepted | 2026-04-13 |
+| [ADR-0003](../decisions/ADR-0003-http-digest-auth.md)         | HTTP Digest Authentication for PrusaLink API                        | Accepted | 2026-04-13 |
+| [ADR-0004](../decisions/ADR-0004-rtsp-ffmpeg-camera.md)       | RTSP Camera Stream via ffmpeg                                       | Accepted | 2026-04-13 |
+| [ADR-0005](../decisions/ADR-0005-circuit-breaker-pattern.md)  | Circuit Breaker Pattern for External Component Resilience           | Accepted | 2026-04-13 |
+| [ADR-0006](../decisions/ADR-0006-config-on-volume.md)         | Configuration Stored as JSON File on Docker Volume                  | Accepted | 2026-04-13 |
+| [ADR-0007](../decisions/ADR-0007-mit-license.md)              | MIT License for Open-Source Release                                 | Accepted | 2026-04-13 |
+| [ADR-0008](../decisions/ADR-0008-janus-webrtc-relay.md)       | Janus WebRTC Relay for Live Stream in Obico Control Panel           | Accepted | 2026-04-30 |
+| [ADR-0009](../decisions/ADR-0009-frontend-stack.md)           | Frontend Stack — React 19 + Vite + Mantine + react-router + i18next | Accepted | 2026-04-30 |
 
 ## Decision Process
 
