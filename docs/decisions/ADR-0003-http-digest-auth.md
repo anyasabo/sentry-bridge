@@ -1,4 +1,4 @@
-# ADR-003: HTTP Digest Authentication for PrusaLink API
+# ADR-0003: HTTP Digest Authentication for PrusaLink API
 
 ## Status
 

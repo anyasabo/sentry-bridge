@@ -1,4 +1,4 @@
-# ADR-001: Docker Single-Container Model (One Container = One Printer)
+# ADR-0001: Docker Single-Container Model (One Container = One Printer)
 
 ## Status
 

@@ -177,7 +177,7 @@ is_primary_cam: true
 **Max size:** 7 MB per frame.  
 **Format:** JPEG only, base64-encoded.
 
-For `obico-prusalink-bridge`: We capture RTSP frames via ffmpeg → encode as base64 JPEG → POST to this endpoint.
+For SentryBridge: We capture RTSP frames via ffmpeg → encode as base64 JPEG → POST to this endpoint.
 
 **Source files:**
 
@@ -201,7 +201,7 @@ Received over WebSocket as passthrough messages:
 }
 ```
 
-**Relevant targets and functions for obico-prusalink-bridge:**
+**Relevant targets and functions for SentryBridge:**
 
 | target    | func       | description         |
 | --------- | ---------- | ------------------- |

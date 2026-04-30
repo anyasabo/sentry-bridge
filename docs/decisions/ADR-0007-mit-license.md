@@ -1,4 +1,4 @@
-# ADR-007: MIT License for Open-Source Release
+# ADR-0007: MIT License for Open-Source Release
 
 ## Status
 

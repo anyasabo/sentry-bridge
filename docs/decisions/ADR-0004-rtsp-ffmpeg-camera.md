@@ -1,4 +1,4 @@
-# ADR-004: RTSP Camera Stream via ffmpeg
+# ADR-0004: RTSP Camera Stream via ffmpeg
 
 ## Status
 

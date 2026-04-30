@@ -55,6 +55,7 @@ WebSocket client that connects to `wss://{server}/ws/dev/` with a Bearer token. 
 ### janus (`src/janus/`)
 
 Two sub-components:
+
 - **janusManager**: lifecycle management for the bundled Janus WebRTC gateway process
 - **janusRelay**: bridges the camera RTP stream into a Janus video room and signals the Obico server
 

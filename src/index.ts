@@ -5,7 +5,7 @@ import { startBridge, stopBridge } from "./bridge";
 const port = parseInt(process.env.PORT ?? "3000", 10);
 
 const server = app.listen(port, () => {
-  console.log(`obico-prusalink-bridge running on port ${port}`);
+  console.log(`sentry-bridge running on port ${port}`);
   startBridge(port).catch((err) =>
     console.error("[bridge] Failed to start:", err)
   );

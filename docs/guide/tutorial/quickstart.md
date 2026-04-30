@@ -38,7 +38,7 @@ docker run -d \
   -p 10100-10200:10100-10200/udp \
   -v ./config:/config \
   -e JANUS_HOST_IP=192.168.1.x \
-  reneleban/obico-prusalink-bridge:latest
+  rleban/sentry-bridge:latest
 ```
 
 Expected result: Docker pulls the image and prints a container ID. The command returns immediately.

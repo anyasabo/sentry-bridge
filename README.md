@@ -56,7 +56,7 @@ For persistent setups, use the included `docker-compose.yml` at the repo root, o
 services:
   bridge:
     image: rleban/sentry-bridge:latest
-    container_name: prubico_bridge
+    container_name: sentry-bridge
     ports:
       - "3000:3000"
       - "10100-10200:10100-10200/udp" # WebRTC ICE media (browser ↔ Janus)

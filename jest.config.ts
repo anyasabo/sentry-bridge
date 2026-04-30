@@ -17,7 +17,7 @@ const config: Config = {
     [
       "jest-html-reporter",
       {
-        pageTitle: "obico-prusalink-bridge Test Report",
+        pageTitle: "SentryBridge Test Report",
         outputPath: "reports/test-report.html",
         includeFailureMsg: true,
         includeConsoleLog: true,

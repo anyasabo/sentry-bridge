@@ -1,4 +1,4 @@
-# ADR-006: Configuration Stored as JSON File on Docker Volume
+# ADR-0006: Configuration Stored as JSON File on Docker Volume
 
 ## Status
 

@@ -21,18 +21,18 @@ PrusaLink is the embedded HTTP API on Prusa printers with Buddy board firmware (
 
 ### Endpoints Used by SentryBridge
 
-| Method | Path | Purpose | Response |
-|--------|------|---------|---------|
-| GET | `/api/v1/status` | Printer telemetry (state, temperatures, axes, speeds) | 200 JSON |
-| GET | `/api/v1/job` | Active job info | 200 JSON (printing) / 204 (idle) |
-| GET | `/api/v1/info` | Printer identity (hostname, serial, nozzle) | 200 JSON |
-| PUT | `/api/v1/job/{id}/pause` | Pause active print | 204 |
-| PUT | `/api/v1/job/{id}/resume` | Resume paused print | 204 |
-| DELETE | `/api/v1/job/{id}` | Cancel and delete active print | 204 |
-| GET | `/api/v1/files` | List files on USB storage | 200 JSON |
-| POST | `/api/v1/files` | Upload G-code file (multipart) | 201 |
-| POST | `/api/v1/files/{path}/print` | Start printing a file | 204 |
-| DELETE | `/api/v1/files/{path}` | Delete a file | 204 |
+| Method | Path                         | Purpose                                               | Response                         |
+| ------ | ---------------------------- | ----------------------------------------------------- | -------------------------------- |
+| GET    | `/api/v1/status`             | Printer telemetry (state, temperatures, axes, speeds) | 200 JSON                         |
+| GET    | `/api/v1/job`                | Active job info                                       | 200 JSON (printing) / 204 (idle) |
+| GET    | `/api/v1/info`               | Printer identity (hostname, serial, nozzle)           | 200 JSON                         |
+| PUT    | `/api/v1/job/{id}/pause`     | Pause active print                                    | 204                              |
+| PUT    | `/api/v1/job/{id}/resume`    | Resume paused print                                   | 204                              |
+| DELETE | `/api/v1/job/{id}`           | Cancel and delete active print                        | 204                              |
+| GET    | `/api/v1/files`              | List files on USB storage                             | 200 JSON                         |
+| POST   | `/api/v1/files`              | Upload G-code file (multipart)                        | 201                              |
+| POST   | `/api/v1/files/{path}/print` | Start printing a file                                 | 204                              |
+| DELETE | `/api/v1/files/{path}`       | Delete a file                                         | 204                              |
 
 ### Status Response Schema
 
@@ -78,17 +78,17 @@ PrusaLink is the embedded HTTP API on Prusa printers with Buddy board firmware (
 
 ### Error Codes
 
-| Code | Meaning |
-|------|---------|
-| 401 | Authentication failed |
-| 404 | Job or file not found |
-| 409 | Invalid state transition (e.g., pause when already paused) |
+| Code | Meaning                                                    |
+| ---- | ---------------------------------------------------------- |
+| 401  | Authentication failed                                      |
+| 404  | Job or file not found                                      |
+| 409  | Invalid state transition (e.g., pause when already paused) |
 
 ---
 
 ## 2. Obico WebSocket Protocol
 
-SentryBridge connects to Obico as a `moonraker_obico` agent (ADR-002).
+SentryBridge connects to Obico as a `moonraker_obico` agent (ADR-0002).
 
 **WebSocket Endpoint:** `wss://{obico_server_url}/ws/dev/`  
 **Authentication:** HTTP header during WebSocket upgrade: `authorization: bearer {auth_token}`  
@@ -181,6 +181,7 @@ The `auth_token` (nested under `printer.auth_token`) is stored as `apiKey` in `c
 ```
 
 **Notes:**
+
 - `current_print_ts`: Unix timestamp if printing, `null` if idle.
 - `event` field is optional — only present on state transitions.
 - Status is also POSTed to `{obicoServerUrl}/api/v1/octo/ping/` as HTTP fallback.
@@ -229,13 +230,13 @@ Fields:
 }
 ```
 
-| `func` | `kwargs` | Action |
-|--------|---------|--------|
-| `pause` | — | `PUT /api/v1/job/{id}/pause` |
-| `resume` | — | `PUT /api/v1/job/{id}/resume` |
-| `cancel` | — | `DELETE /api/v1/job/{id}` |
-| `start_printer_local_print` | `{ gcode_file_id }` | Start printing file by Obico file ID |
-| `file_downloader.download` | `{ url }` | Download G-code from Obico, upload to PrusaLink, start print |
+| `func`                      | `kwargs`            | Action                                                       |
+| --------------------------- | ------------------- | ------------------------------------------------------------ |
+| `pause`                     | —                   | `PUT /api/v1/job/{id}/pause`                                 |
+| `resume`                    | —                   | `PUT /api/v1/job/{id}/resume`                                |
+| `cancel`                    | —                   | `DELETE /api/v1/job/{id}`                                    |
+| `start_printer_local_print` | `{ gcode_file_id }` | Start printing file by Obico file ID                         |
+| `file_downloader.download`  | `{ url }`           | Download G-code from Obico, upload to PrusaLink, start print |
 
 #### http.tunnelv2 Request
 
@@ -257,30 +258,30 @@ Bridge proxies the request to its own Express API (`http://localhost:{PORT}{path
 
 ## 3. SentryBridge REST API
 
-SentryBridge exposes a REST API consumed by the React frontend. The full machine-readable specification is available as **[OpenAPI YAML at `docs/spec/api.yaml`](./api.yaml)**.
+SentryBridge exposes a REST API consumed by the React frontend. The full machine-readable specification is available as **[OpenAPI YAML at `docs/requirements/api.yaml`](./api.yaml)**.
 
 ### Summary of Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health/` | Detailed health status for all components |
-| GET | `/api/health/live` | Liveness probe (Docker HEALTHCHECK) |
-| GET | `/api/health/ready` | Readiness probe (503 if critical component DOWN) |
-| GET | `/api/config` | Read current configuration |
-| POST | `/api/setup/save` | Save configuration and restart bridge |
-| GET | `/api/status/stream` | SSE stream of printer + bridge status |
-| GET | `/api/printer/info` | Printer name/hostname |
-| GET | `/api/camera/snapshot` | JPEG camera snapshot |
-| POST | `/api/control` | Printer control (pause/resume/cancel) |
-| POST | `/api/bridge/reconnect` | Reconnect a component |
-| POST | `/api/wizard/test-prusalink` | Test PrusaLink connection |
-| POST | `/api/wizard/test-camera` | Test RTSP camera stream |
-| POST | `/api/wizard/verify-pairing` | Verify Obico pairing code |
-| GET | `/api/wizard/configured` | Check if bridge is configured |
-| GET | `/api/files/` | List G-code files (OctoPrint-compatible) |
-| POST | `/api/files/` | Upload G-code file |
-| POST | `/api/files/:filename/print` | Start print |
-| DELETE | `/api/files/:filename` | Delete file |
-| GET | `/stream/mjpeg` | MJPEG live stream |
+| Method | Path                         | Description                                      |
+| ------ | ---------------------------- | ------------------------------------------------ |
+| GET    | `/api/health/`               | Detailed health status for all components        |
+| GET    | `/api/health/live`           | Liveness probe (Docker HEALTHCHECK)              |
+| GET    | `/api/health/ready`          | Readiness probe (503 if critical component DOWN) |
+| GET    | `/api/config`                | Read current configuration                       |
+| POST   | `/api/setup/save`            | Save configuration and restart bridge            |
+| GET    | `/api/status/stream`         | SSE stream of printer + bridge status            |
+| GET    | `/api/printer/info`          | Printer name/hostname                            |
+| GET    | `/api/camera/snapshot`       | JPEG camera snapshot                             |
+| POST   | `/api/control`               | Printer control (pause/resume/cancel)            |
+| POST   | `/api/bridge/reconnect`      | Reconnect a component                            |
+| POST   | `/api/wizard/test-prusalink` | Test PrusaLink connection                        |
+| POST   | `/api/wizard/test-camera`    | Test RTSP camera stream                          |
+| POST   | `/api/wizard/verify-pairing` | Verify Obico pairing code                        |
+| GET    | `/api/wizard/configured`     | Check if bridge is configured                    |
+| GET    | `/api/files/`                | List G-code files (OctoPrint-compatible)         |
+| POST   | `/api/files/`                | Upload G-code file                               |
+| POST   | `/api/files/:filename/print` | Start print                                      |
+| DELETE | `/api/files/:filename`       | Delete file                                      |
+| GET    | `/stream/mjpeg`              | MJPEG live stream                                |
 
 See [`api.yaml`](./api.yaml) for request/response schemas, status codes, and examples.

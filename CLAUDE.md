@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Vault-Wiki
+
+This project is registered in the claude-vault:
+`/Users/reneleban/Obsidian/claude-vault/claude-vault/projects/dev-sentry-bridge/wiki/`
+
+For questions about architecture, decisions, module structure, or stack, check there first (`overview.md`, `adrs.md`, `module-map.md`). For hybrid search, run `qmd query "<question>"` from the vault root.
+
+For lasting changes (architecture, new modules, new ADRs), run `/wiki-sync` at the end of the session to keep the wiki up to date.
+
 ## Hard Rules
 
 - **Never commit `.planning/` or `.claude/`** — these are local workspace directories, gitignored for a reason. No plugin, workflow, or automation overrides this.

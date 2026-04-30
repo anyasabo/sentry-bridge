@@ -1,4 +1,4 @@
-# ADR-005: Circuit Breaker Pattern for External Component Resilience
+# ADR-0005: Circuit Breaker Pattern for External Component Resilience
 
 ## Status
 

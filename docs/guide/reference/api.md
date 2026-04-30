@@ -2,7 +2,7 @@
 
 SentryBridge exposes a REST API consumed by the React web UI and by Obico's `http.tunnelv2` passthru handler. You can also use it directly for scripting, monitoring, or integration.
 
-For the complete authoritative endpoint specification, see → [`docs/spec/api.yaml`](../../spec/api.yaml) (OpenAPI 3.0).
+For the complete authoritative endpoint specification, see → [`docs/requirements/api.yaml`](../../requirements/api.yaml) (OpenAPI 3.0).
 
 This guide covers the most useful endpoints with practical curl examples.
 
@@ -158,6 +158,6 @@ curl -X DELETE http://localhost:3000/api/files/local/print.gcode
 
 The examples above cover the most common operations. For every endpoint, request schema, and response schema, see the OpenAPI specification:
 
-→ [`docs/spec/api.yaml`](../../spec/api.yaml)
+→ [`docs/requirements/api.yaml`](../../requirements/api.yaml)
 
 You can render it locally with any OpenAPI viewer, or paste it into [editor.swagger.io](https://editor.swagger.io).

@@ -41,16 +41,16 @@ graph TD
 
 ## Deployment Configuration
 
-| Concern | Configuration |
-|---------|---------------|
-| Container port | `3000` (HTTP) |
-| WebRTC ports | `10100–10200/udp` (Janus ICE media) |
-| Config persistence | Docker volume mounted at `/config` |
-| LAN IP for WebRTC | `JANUS_HOST_IP` environment variable (required for WebRTC) |
-| Restart policy | `unless-stopped` recommended |
-| Grace period | `stop_grace_period: 30s` (SIGTERM → ffmpeg shutdown) |
-| Health check | `GET /api/health/live` — Docker liveness probe |
-| Readiness check | `GET /api/health/ready` — returns 503 when critical component is DOWN for > 120s |
+| Concern            | Configuration                                                                    |
+| ------------------ | -------------------------------------------------------------------------------- |
+| Container port     | `3000` (HTTP)                                                                    |
+| WebRTC ports       | `10100–10200/udp` (Janus ICE media)                                              |
+| Config persistence | Docker volume mounted at `/config`                                               |
+| LAN IP for WebRTC  | `JANUS_HOST_IP` environment variable (required for WebRTC)                       |
+| Restart policy     | `unless-stopped` recommended                                                     |
+| Grace period       | `stop_grace_period: 30s` (SIGTERM → ffmpeg shutdown)                             |
+| Health check       | `GET /api/health/live` — Docker liveness probe                                   |
+| Readiness check    | `GET /api/health/ready` — returns 503 when critical component is DOWN for > 120s |
 
 ## Scaling
 

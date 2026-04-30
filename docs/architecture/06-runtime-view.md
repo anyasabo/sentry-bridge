@@ -66,7 +66,7 @@ sequenceDiagram
     Bridge->>CB: recordFailure()
     CB-->>Bridge: state: CLOSED (failure count < threshold)
     Bridge->>Health: setComponentState("obico_ws", DOWN)
-    
+
     loop Exponential backoff (1s → 2s → 4s → … → 30s max)
         Bridge->>Obico: WebSocket connect attempt
         alt Connection succeeds
@@ -99,7 +99,7 @@ sequenceDiagram
     Bridge->>PrusaLink: POST /api/v1/files/usb/{filename}/print (HTTP Digest Auth)
     PrusaLink-->>Bridge: 204 No Content
     Bridge->>Obico: WebSocket passthru ACK { ref, ret: null }
-    
+
     Note over Bridge,Obico: For file_downloader.download flow:
     Obico->>Bridge: WebSocket passthru { func: "file_downloader.download", kwargs: { url } }
     Bridge->>Bridge: SSRF check — url origin must match configured obicoServerUrl
@@ -158,7 +158,7 @@ sequenceDiagram
 
     Note over CB: threshold=5 reached → circuit OPEN
     CB->>Health: setComponentState("prusalink", DOWN)
-    
+
     loop While circuit OPEN (60s reset timeout)
         Bridge->>CB: execute(getStatus)
         CB-->>Bridge: CircuitOpenError (no request sent to PrusaLink)
@@ -167,7 +167,7 @@ sequenceDiagram
     Note over CB: 60s elapsed → circuit HALF-OPEN
     Bridge->>CB: execute(getStatus)
     CB->>PrusaLink: GET /api/v1/status (probe request)
-    
+
     alt PrusaLink recovered
         PrusaLink-->>CB: 200 OK
         CB->>CB: circuit CLOSED

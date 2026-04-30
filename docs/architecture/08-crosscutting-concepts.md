@@ -6,12 +6,13 @@
 
 All three external components (PrusaLink, Obico WebSocket, Camera) are protected by a **Circuit Breaker** registered in `CircuitBreakerRegistry` (`src/lib/health.ts`).
 
-| Parameter | Default | Environment Variable |
-|-----------|---------|---------------------|
-| Failure threshold | 5 | `CIRCUIT_BREAKER_THRESHOLD` |
-| Reset timeout | 60 000 ms | `CIRCUIT_BREAKER_RESET_TIMEOUT_MS` |
+| Parameter         | Default   | Environment Variable               |
+| ----------------- | --------- | ---------------------------------- |
+| Failure threshold | 5         | `CIRCUIT_BREAKER_THRESHOLD`        |
+| Reset timeout     | 60 000 ms | `CIRCUIT_BREAKER_RESET_TIMEOUT_MS` |
 
 **States:**
+
 - **CLOSED** — normal operation; requests pass through.
 - **OPEN** — after `threshold` consecutive failures; requests are rejected immediately with `CircuitOpenError`. No traffic reaches the failing component.
 - **HALF-OPEN** — after `resetTimeout` ms; one probe request is sent. If successful, transitions to CLOSED. If it fails, transitions back to OPEN.
@@ -22,10 +23,10 @@ All three external components (PrusaLink, Obico WebSocket, Camera) are protected
 
 Transient errors (network glitches, timeouts) are retried using `src/lib/retry.ts`:
 
-| Parameter | Default | Environment Variable |
-|-----------|---------|---------------------|
-| Base delay | 1 000 ms | `RETRY_BASE_DELAY_MS` |
-| Max delay | 30 000 ms | `RETRY_MAX_DELAY_MS` |
+| Parameter  | Default   | Environment Variable  |
+| ---------- | --------- | --------------------- |
+| Base delay | 1 000 ms  | `RETRY_BASE_DELAY_MS` |
+| Max delay  | 30 000 ms | `RETRY_MAX_DELAY_MS`  |
 
 Backoff formula: `min(baseDelay * 2^attempt, maxDelay)` with jitter.
 
@@ -36,6 +37,7 @@ The Obico Agent reconnects automatically on WebSocket disconnect using exponenti
 ### Health Monitor
 
 `HealthMonitor` (`src/lib/health-monitor.ts`) tracks component state (`HEALTHY`, `DEGRADED`, `DOWN`) and exposes it via:
+
 - `GET /api/health/` — detailed per-component status (dashboard use)
 - `GET /api/health/live` — liveness probe (Docker HEALTHCHECK)
 - `GET /api/health/ready` — readiness probe; returns 503 when any critical component has been DOWN for > `HEALTHCHECK_CRITICAL_TIMEOUT_MS` (default 120 s)
@@ -72,6 +74,7 @@ Config changes (saved via the dashboard) trigger a `configChanged` event via `co
 ### Boundary Validation
 
 Input validation occurs at system boundaries:
+
 - Wizard API routes validate required fields before forwarding to internal modules.
 - `POST /api/setup/save` validates all required config fields (prusalink URL/credentials, camera RTSP URL, Obico server URL + API key).
 - `POST /api/control` validates the `action` field against an allowlist `["pause", "resume", "cancel"]`.
@@ -79,6 +82,7 @@ Input validation occurs at system boundaries:
 ### Security Guards (http.tunnel)
 
 The `http.tunnelv2` Obico passthru handler enforces:
+
 - **Path guard**: only `/api/*` paths are proxied — prevents use as a general HTTP proxy (EoP mitigation).
 - **Method guard**: only `GET`, `POST`, `PUT`, `DELETE` are allowed.
 - **SSRF mitigation**: `file_downloader.download` only accepts URLs whose origin matches the configured Obico server URL.
@@ -86,6 +90,7 @@ The `http.tunnelv2` Obico passthru handler enforces:
 ### Error Responses
 
 All API routes return `{ message: string }` on errors. HTTP status codes follow REST conventions:
+
 - `400` — validation failure (missing/invalid input)
 - `401` — PrusaLink authentication failure
 - `404` — config not found
@@ -99,14 +104,14 @@ All API routes return `{ message: string }` on errors. HTTP status codes follow 
 
 SentryBridge uses `console.log` / `console.error` with structured prefixes:
 
-| Prefix | Module |
-|--------|--------|
-| `[bridge]` | Bridge Orchestrator |
-| `[prusalink]` | PrusaLink Client |
-| `[camera]` | Camera Module |
-| `[obico]` | Obico Agent |
-| `[janus]` | Janus Manager / Relay |
-| `[health]` | Health Monitor |
+| Prefix        | Module                |
+| ------------- | --------------------- |
+| `[bridge]`    | Bridge Orchestrator   |
+| `[prusalink]` | PrusaLink Client      |
+| `[camera]`    | Camera Module         |
+| `[obico]`     | Obico Agent           |
+| `[janus]`     | Janus Manager / Relay |
+| `[health]`    | Health Monitor        |
 
 All output goes to stdout/stderr and is available via `docker logs`. No log rotation or structured JSON logging in the current version.
 
@@ -115,6 +120,7 @@ All output goes to stdout/stderr and is available via `docker logs`. No log rota
 ## 8.5 Graceful Shutdown
 
 On `SIGTERM` (Docker `docker stop`), the SIGTERM handler in `src/index.ts`:
+
 1. Calls `stopBridge()` — stops the poll interval, closes the Obico WebSocket, kills the ffmpeg process (with a configurable `ffmpegKillTimeoutSeconds`, default 3 s).
 2. Closes the Express HTTP server.
 3. Falls back to `process.exit(0)` after an 8-second hard timeout (`.unref()` so Jest tests are not blocked).

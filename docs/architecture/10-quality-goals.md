@@ -4,13 +4,13 @@ The following quality goals drive SentryBridge's architecture, listed in priorit
 
 ## Quality Goals
 
-| Priority | Quality Goal | Motivation |
-|----------|-------------|------------|
-| 1 | **Reliability** | The bridge must forward print status and camera frames to Obico consistently. Dropped status updates cause Obico to mark the printer offline, disabling AI failure detection. |
-| 2 | **Operability** | Setup must take under 10 minutes for a home lab user with no development background. The 4-step wizard and Docker Compose deployment support this goal. |
-| 3 | **Recoverability** | When PrusaLink, the Obico WebSocket, or the camera fails transiently, the bridge must recover automatically without user intervention. |
-| 4 | **Correctness** | Print commands dispatched from Obico (pause, resume, cancel, start print) must be forwarded accurately to PrusaLink with ref-matched ACKs. Silent failures are not acceptable. |
-| 5 | **Portability** | The Docker image must run on AMD64 (Unraid) and ARM64 (Raspberry Pi 4) without modification. |
+| Priority | Quality Goal       | Motivation                                                                                                                                                                     |
+| -------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1        | **Reliability**    | The bridge must forward print status and camera frames to Obico consistently. Dropped status updates cause Obico to mark the printer offline, disabling AI failure detection.  |
+| 2        | **Operability**    | Setup must take under 10 minutes for a home lab user with no development background. The 4-step wizard and Docker Compose deployment support this goal.                        |
+| 3        | **Recoverability** | When PrusaLink, the Obico WebSocket, or the camera fails transiently, the bridge must recover automatically without user intervention.                                         |
+| 4        | **Correctness**    | Print commands dispatched from Obico (pause, resume, cancel, start print) must be forwarded accurately to PrusaLink with ref-matched ACKs. Silent failures are not acceptable. |
+| 5        | **Portability**    | The Docker image must run on AMD64 (Unraid) and ARM64 (Raspberry Pi 4) without modification.                                                                                   |
 
 ## Quality Scenarios
 

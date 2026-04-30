@@ -1,4 +1,4 @@
-# ADR-002: OctoPrint Agent Identity for Obico WebSocket
+# ADR-0002: OctoPrint Agent Identity for Obico WebSocket
 
 ## Status
 

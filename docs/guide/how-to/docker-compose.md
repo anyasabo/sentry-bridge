@@ -25,8 +25,8 @@ Or create a new directory and copy this block into a file named `docker-compose.
 ```yaml
 services:
   bridge:
-    image: reneleban/obico-prusalink-bridge:latest
-    container_name: prubico_bridge
+    image: rleban/sentry-bridge:latest
+    container_name: sentry-bridge
     ports:
       - "${PORT:-3000}:3000"
       - "10100-10200:10100-10200/udp"
@@ -136,10 +136,10 @@ The `./config` volume directory persists — your `config.json` is not deleted.
 
 ## Port reference
 
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| 3000 | TCP | SentryBridge Web UI and REST API |
-| 10100–10200 | UDP | Janus WebRTC ICE media (browser ↔ Janus) |
+| Port        | Protocol | Purpose                                  |
+| ----------- | -------- | ---------------------------------------- |
+| 3000        | TCP      | SentryBridge Web UI and REST API         |
+| 10100–10200 | UDP      | Janus WebRTC ICE media (browser ↔ Janus) |
 
 If port 3000 is in use on your host, change the left side of `"${PORT:-3000}:3000"` and set `PORT=<new-port>` in `.env`.
 

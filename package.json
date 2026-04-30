@@ -1,5 +1,5 @@
 {
-  "name": "obico-prusalink-bridge",
+  "name": "sentry-bridge",
   "version": "1.0.0",
   "description": "Docker-based agent connecting Prusa Core One (PrusaLink) to Obico",
   "main": "dist/index.js",
@@ -17,8 +17,8 @@
     "test:backend": "jest --forceExit",
     "test:all": "npm run test:backend",
     "typecheck": "tsc --noEmit",
-    "build:docker": "docker build -t obico-prusalink-bridge .",
-    "build:docker:multiplatform": "docker buildx build --platform linux/amd64,linux/arm64 -t obico-prusalink-bridge .",
+    "build:docker": "docker build -t sentry-bridge .",
+    "build:docker:multiplatform": "docker buildx build --platform linux/amd64,linux/arm64 -t sentry-bridge .",
     "docker:dev": "docker compose up --build -d",
     "docker:run": "docker compose up --pull never -d",
     "docker:logs": "docker compose logs -f",
