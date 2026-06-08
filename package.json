@@ -25,6 +25,9 @@
     "docker:clean": "docker compose down --rmi local; true",
     "prepare": "husky"
   },
+  "engines": {
+    "node": ">=22.22.1"
+  },
   "dependencies": {
     "@types/ws": "^8.18.1",
     "digest-fetch": "^3.1.1",
@@ -37,14 +40,14 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.1.0",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.9.1",
     "@types/supertest": "^7.2.0",
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.3",
     "husky": "^9.0.11",
-    "jest": "^30.3.0",
+    "jest": "^30.4.2",
     "jest-html-reporter": "^4.4.0",
-    "jest-junit": "^16.0.0",
-    "lint-staged": "^16.4.0",
+    "jest-junit": "^17.0.0",
+    "lint-staged": "^17.0.7",
     "nodemon": "^3.1.4",
     "prettier": "^3.3.2",
     "supertest": "^7.0.0",

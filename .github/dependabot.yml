@@ -10,6 +10,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
+    groups:
+      all-dependencies:
+        patterns: ["*"]
 
   - package-ecosystem: "npm"
     directory: "/frontend"
@@ -21,3 +24,6 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
+    groups:
+      all-dependencies:
+        patterns: ["*"]
