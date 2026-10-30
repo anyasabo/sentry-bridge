@@ -2,22 +2,12 @@ import { spawn, ChildProcess } from "child_process";
 import { CameraConfig, CameraModule } from "./types";
 import { createCircuitBreaker } from "../lib/circuit-breaker";
 import { calculateDelay } from "../lib/retry";
+import { terminate } from "../lib/terminate";
 import { resilienceConfig } from "../lib/env-config";
 import { healthMonitor, circuitBreakerRegistry } from "../lib/health";
 import { HealthState, ErrorSeverity } from "../lib/health-monitor";
 
-const SIGKILL_DELAY_MS = 5_000;
-
 function discard(): void {}
-
-// ffmpeg can't act on SIGTERM while it is blocked in a write. Restarts hang off
-// the `close` event, so a process that never exits would never be replaced.
-function terminate(child: ChildProcess): void {
-  child.kill();
-  const killTimer = setTimeout(() => child.kill("SIGKILL"), SIGKILL_DELAY_MS);
-  killTimer.unref();
-  child.once("close", () => clearTimeout(killTimer));
-}
 
 export function createCamera(config: CameraConfig): CameraModule {
   let proc: ChildProcess | null = null;

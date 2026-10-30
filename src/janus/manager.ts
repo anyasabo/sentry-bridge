@@ -4,6 +4,7 @@ import * as path from "path";
 import * as os from "os";
 import WebSocket from "ws";
 import { calculateDelay } from "../lib/retry";
+import { terminate } from "../lib/terminate";
 import {
   resilienceConfig,
   janusDebugLevel,
@@ -35,6 +36,7 @@ export function createJanusManager(): JanusManager {
   let janusBinary: string | null = null;
   let janusMode: JanusMode = "unavailable";
   let externalPollTimer: ReturnType<typeof setTimeout> | null = null;
+  let bundledWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
   const wsUrl = `ws://127.0.0.1:${JANUS_WS_PORT}`;
 
   function findJanusBinary(): string | null {
@@ -197,6 +199,30 @@ export function createJanusManager(): JanusManager {
     }, delay);
   }
 
+  /** A hung Janus never exits, so `close` alone can't catch it. */
+  function startBundledWatchdog(): void {
+    const INTERVAL_MS = 10_000;
+    const MAX_MISSED_PROBES = 3;
+    let missed = 0;
+    async function tick() {
+      if (stopped) return;
+      // No process means a restart is pending; the close handler owns it.
+      const reachable = proc ? await probeWs() : true;
+      if (stopped) return;
+      missed = reachable ? 0 : missed + 1;
+      if (missed >= MAX_MISSED_PROBES && proc) {
+        console.warn(
+          `[janus] No answer on ${wsUrl} for ${MAX_MISSED_PROBES} probes — killing Janus`
+        );
+        healthMonitor.setState("janus", HealthState.RECOVERING);
+        missed = 0;
+        terminate(proc);
+      }
+      bundledWatchdogTimer = setTimeout(tick, INTERVAL_MS);
+    }
+    bundledWatchdogTimer = setTimeout(tick, INTERVAL_MS);
+  }
+
   function spawnEmbedded(): void {
     if (proc) return;
     const configDir = writeConfig();
@@ -279,6 +305,7 @@ export function createJanusManager(): JanusManager {
           restartAttempt = 0;
           healthMonitor.setState("janus", HealthState.HEALTHY);
           console.log("[janus] Bundled Janus ready on", wsUrl);
+          startBundledWatchdog();
         } else {
           healthMonitor.setState("janus", HealthState.DOWN);
         }
@@ -322,6 +349,7 @@ export function createJanusManager(): JanusManager {
           restartAttempt = 0;
           healthMonitor.setState("janus", HealthState.HEALTHY);
           console.log("[janus] Bundled Janus ready on", wsUrl);
+          startBundledWatchdog();
         } else {
           healthMonitor.setState("janus", HealthState.DOWN);
         }
@@ -350,8 +378,12 @@ export function createJanusManager(): JanusManager {
         clearTimeout(externalPollTimer);
         externalPollTimer = null;
       }
+      if (bundledWatchdogTimer) {
+        clearTimeout(bundledWatchdogTimer);
+        bundledWatchdogTimer = null;
+      }
       if (proc) {
-        proc.kill();
+        terminate(proc);
         proc = null;
       }
       healthMonitor.setState("janus", HealthState.DOWN);
