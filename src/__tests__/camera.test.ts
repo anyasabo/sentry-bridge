@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { createCamera, formatFfmpegLog } from "../camera/camera";
 import { CameraConfig } from "../camera/types";
 import { healthMonitor, circuitBreakerRegistry } from "../lib/health";
+import { metricsRegistry } from "../lib/metrics";
 import { ErrorSeverity, HealthState } from "../lib/health-monitor";
 import * as circuitBreakerModule from "../lib/circuit-breaker";
 import { CircuitState } from "../lib/circuit-breaker";
@@ -619,6 +620,25 @@ describe("Camera", () => {
         ErrorSeverity.ERROR
       );
 
+      camera.stop();
+    });
+
+    it("records camera frames in the metrics", async () => {
+      const lastFrame = async () =>
+        (
+          await metricsRegistry
+            .getSingleMetric(
+              "sentry_bridge_camera_last_frame_timestamp_seconds"
+            )!
+            .get()
+        ).values[0].value;
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+      const before = Date.now() / 1000;
+      proc.stdout!.emit("data", fakeJpeg);
+      expect(await lastFrame()).toBeGreaterThanOrEqual(Math.floor(before));
       camera.stop();
     });
 

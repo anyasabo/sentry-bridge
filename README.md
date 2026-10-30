@@ -212,6 +212,26 @@ These are intentional product decisions, not bugs:
 - **Built for the LAN, without authentication.** The web UI and the REST API have no login. Anyone who can reach port 3000 can change the config, pause or cancel prints, start and delete files. Do not expose port 3000 to the internet or to networks you don't trust. For remote access, put the bridge behind a VPN (e.g. Tailscale or WireGuard) or a reverse proxy with its own authentication.
 - **Manual printer controls are limited.** Besides pause / resume / cancel, the bridge can list, upload (`POST /api/files/upload`), start and delete G-code files. It does not offer filament load/unload or print queue management.
 
+## Metrics
+
+`GET /metrics` serves Prometheus metrics on the web UI port, with no login. Keep the port off untrusted networks, as with the rest of the UI.
+
+| Metric                                                      | Meaning                               |
+| ----------------------------------------------------------- | ------------------------------------- |
+| `sentry_bridge_camera_last_frame_timestamp_seconds`         | When the camera last produced a frame |
+| `sentry_bridge_frame_upload_last_success_timestamp_seconds` | When Obico last accepted a frame      |
+| `sentry_bridge_frame_uploads_total{result}`                 | Frame uploads, `success` or `failure` |
+| `sentry_bridge_component_state{component,state}`            | 1 on each component's current state   |
+| `sentry_bridge_component_restarts_total{component}`         | Restarts per component                |
+
+Node.js process metrics are included. Frames are uploaded while the printer is idle too, so failure detection has stopped if the last upload gets old:
+
+```yaml
+- alert: SentryBridgeNoFrames
+  expr: time() - sentry_bridge_frame_upload_last_success_timestamp_seconds > 120
+  for: 3m
+```
+
 ## Troubleshooting
 
 If a startup check fails (PrusaLink, credentials, camera, Obico, pairing), the dashboard shows which one and how to fix it, with a **Re-check** button. The checks never stop the bridge from starting.

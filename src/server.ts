@@ -8,12 +8,14 @@ import bridgeRouter from "./routes/bridge";
 import filesRouter from "./routes/files";
 import bootChecksRouter from "./routes/boot-checks";
 import { requestGuard } from "./lib/request-guard";
+import metricsRouter from "./routes/metrics";
 
 export const app = express();
 
 app.use(requestGuard());
 app.use(express.json());
 
+app.use("/metrics", metricsRouter);
 app.use("/api/health", healthRouter);
 app.use("/api/wizard", wizardRouter);
 app.use("/api/bridge", bridgeRouter);
