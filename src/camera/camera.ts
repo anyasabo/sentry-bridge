@@ -61,9 +61,10 @@ export function createCamera(config: CameraConfig): CameraModule {
     if (mjpegWatchdogTimer) clearTimeout(mjpegWatchdogTimer);
     mjpegWatchdogTimer = setTimeout(() => {
       if (mjpegStopped) return;
-      console.warn(
-        `[camera] MJPEG watchdog: no frame for ${MJPEG_WATCHDOG_MS / 1000}s — killing ffmpeg`
-      );
+      const msg = `MJPEG watchdog: no frame for ${MJPEG_WATCHDOG_MS / 1000}s`;
+      console.warn(`[camera] ${msg} — killing ffmpeg`);
+      healthMonitor.setState("camera", HealthState.RECOVERING);
+      healthMonitor.pushError("camera", msg, ErrorSeverity.ERROR);
       if (proc) {
         terminate(proc);
         proc = null;
@@ -148,7 +149,10 @@ export function createCamera(config: CameraConfig): CameraModule {
     if (rtpWatchdogTimer) clearTimeout(rtpWatchdogTimer);
     rtpWatchdogTimer = setTimeout(() => {
       if (gen !== rtpGeneration) return;
-      console.warn("[camera] RTP watchdog: no output for 30s — killing ffmpeg");
+      const msg = `RTP watchdog: no output for ${RTP_WATCHDOG_MS / 1000}s`;
+      console.warn(`[camera] ${msg} — killing ffmpeg`);
+      healthMonitor.setState("rtp_stream", HealthState.RECOVERING);
+      healthMonitor.pushError("rtp_stream", msg, ErrorSeverity.ERROR);
       if (rtpProc) {
         terminate(rtpProc);
         rtpProc = null;
