@@ -180,6 +180,30 @@ describe("Camera", () => {
       expect(proc.kill).toHaveBeenCalled();
     });
 
+    it("removes RTSP credentials from the RTP ffmpeg's forwarded log", async () => {
+      const stderrWrite = jest
+        .spyOn(process.stderr, "write")
+        .mockImplementation(() => true);
+      const proc = makeMockProcess({
+        stderrData: [
+          "Input #0, rtsp, from 'rtsp://user:s3cret@10.0.0.1/live':\n",
+          "rtsps://admin:p@ssw0rd@cam.local:322/live: Connection refused\n",
+        ],
+      });
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.startRtpStream(5004);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const logged = stderrWrite.mock.calls.map(([chunk]) => chunk).join("");
+      stderrWrite.mockRestore();
+      camera.stopRtpStream();
+      expect(logged).toContain("rtsp://***@10.0.0.1/live");
+      expect(logged).toContain("rtsps://***@cam.local:322/live");
+      expect(logged).not.toContain("s3cret");
+      expect(logged).not.toContain("ssw0rd");
+    });
+
     it("does not crash if stop() is called before start()", () => {
       const camera = createCamera(config);
       expect(() => camera.stop()).not.toThrow();
