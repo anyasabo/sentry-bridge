@@ -12,7 +12,11 @@ import { createObicoAgent } from "./obico/agent";
 import { HttpFetcher } from "./obico/types";
 import { createJanusManager } from "./janus/manager";
 import { createJanusRelay } from "./janus/relay";
-import { setJanusMode, healthMonitor, circuitBreakerRegistry } from "./lib/health";
+import {
+  setJanusMode,
+  healthMonitor,
+  circuitBreakerRegistry,
+} from "./lib/health";
 import { HealthState } from "./lib/health-monitor";
 import type { ComponentName } from "./lib/health-monitor";
 
@@ -147,20 +151,28 @@ export function diffConfig(prev: Config, next: Config) {
   };
 }
 
-function registerFrameForwarding(
+export function registerFrameForwarding(
   camera: ReturnType<typeof createCamera>,
   agent: ReturnType<typeof createObicoAgent>,
   uploadIntervalMs: number
 ): void {
   let lastUpload = 0;
+  let uploadFailing = false;
   camera.onFrame(async (frame) => {
     const now = Date.now();
     if (now - lastUpload < uploadIntervalMs) return;
     lastUpload = now;
     try {
       await agent.sendFrame(frame);
-    } catch {
-      // non-fatal
+      if (uploadFailing) console.log("[bridge] Frame uploads recovered");
+      uploadFailing = false;
+    } catch (err) {
+      // non-fatal, but without frames Obico detects nothing, so say so once
+      if (!uploadFailing) {
+        const reason = err instanceof Error ? err.message : String(err);
+        console.warn(`[bridge] Frame upload failing: ${reason}`);
+      }
+      uploadFailing = true;
     }
   });
 }
@@ -242,7 +254,9 @@ async function applyConfigChange(newConfig: Config): Promise<void> {
 
 export type ReconnectTarget = "prusalink" | "obico" | "camera";
 
-export async function reconnectComponent(component: ReconnectTarget): Promise<void> {
+export async function reconnectComponent(
+  component: ReconnectTarget
+): Promise<void> {
   console.log("[bridge] Reconnecting component:", component);
 
   if (!currentConfig) {
