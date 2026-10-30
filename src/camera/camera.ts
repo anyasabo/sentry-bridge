@@ -6,7 +6,18 @@ import { resilienceConfig } from "../lib/env-config";
 import { healthMonitor, circuitBreakerRegistry } from "../lib/health";
 import { HealthState, ErrorSeverity } from "../lib/health-monitor";
 
+const SIGKILL_DELAY_MS = 5_000;
+
 function discard(): void {}
+
+// ffmpeg can't act on SIGTERM while it is blocked in a write. Restarts hang off
+// the `close` event, so a process that never exits would never be replaced.
+function terminate(child: ChildProcess): void {
+  child.kill();
+  const killTimer = setTimeout(() => child.kill("SIGKILL"), SIGKILL_DELAY_MS);
+  killTimer.unref();
+  child.once("close", () => clearTimeout(killTimer));
+}
 
 export function createCamera(config: CameraConfig): CameraModule {
   let proc: ChildProcess | null = null;
@@ -51,10 +62,10 @@ export function createCamera(config: CameraConfig): CameraModule {
     mjpegWatchdogTimer = setTimeout(() => {
       if (mjpegStopped) return;
       console.warn(
-        "[camera] MJPEG watchdog: no frame for 30s — killing ffmpeg"
+        `[camera] MJPEG watchdog: no frame for ${MJPEG_WATCHDOG_MS / 1000}s — killing ffmpeg`
       );
       if (proc) {
-        proc.kill();
+        terminate(proc);
         proc = null;
       }
     }, MJPEG_WATCHDOG_MS);
@@ -139,7 +150,7 @@ export function createCamera(config: CameraConfig): CameraModule {
       if (gen !== rtpGeneration) return;
       console.warn("[camera] RTP watchdog: no output for 30s — killing ffmpeg");
       if (rtpProc) {
-        rtpProc.kill();
+        terminate(rtpProc);
         rtpProc = null;
       }
     }, RTP_WATCHDOG_MS);
@@ -228,7 +239,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         mjpegWatchdogTimer = null;
       }
       if (proc) {
-        proc.kill();
+        terminate(proc);
         proc = null;
       }
       healthMonitor.setState("camera", HealthState.DOWN);
@@ -304,7 +315,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         rtpWatchdogTimer = null;
       }
       if (rtpProc) {
-        rtpProc.kill();
+        terminate(rtpProc);
         rtpProc = null;
       }
       healthMonitor.setState("rtp_stream", HealthState.DOWN);
@@ -335,7 +346,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         const timer = setTimeout(() => {
           if (settled) return;
           settled = true;
-          p.kill();
+          terminate(p);
           reject(new Error(`testStream timed out after ${timeoutMs}ms`));
         }, timeoutMs);
 
