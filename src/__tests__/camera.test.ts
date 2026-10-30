@@ -78,6 +78,16 @@ describe("Camera", () => {
       );
     });
 
+    it("passes the RTSP socket timeout under its current FFmpeg name", async () => {
+      mockSpawn.mockReturnValue(
+        makeMockProcess({ stdoutData: [fakeJpeg], exitCode: 0 })
+      );
+      await createCamera(config).testStream();
+      const args = mockSpawn.mock.calls[0][1];
+      expect(args).toContain("-timeout");
+      expect(args).not.toContain("-stimeout"); // removed in FFmpeg 5.0
+    });
+
     it("rejects when ffmpeg exits with non-zero code", async () => {
       mockSpawn.mockReturnValue(
         makeMockProcess({ stdoutData: [], exitCode: 1 })
