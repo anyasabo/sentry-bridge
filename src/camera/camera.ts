@@ -10,6 +10,11 @@ const SIGKILL_DELAY_MS = 5_000;
 
 function discard(): void {}
 
+// ffmpeg prints its input URL, password included.
+function redactRtspCredentials(text: string): string {
+  return text.replace(/rtsp:\/\/[^@\s/]+@/g, "rtsp://***@");
+}
+
 // ffmpeg can't act on SIGTERM while it is blocked in a write. Restarts hang off
 // the `close` event, so a process that never exits would never be replaced.
 function terminate(child: ChildProcess): void {
@@ -190,7 +195,7 @@ export function createCamera(config: CameraConfig): CameraModule {
     rtpProc.stdout!.on("data", discard);
     rtpProc.stderr!.on("data", (d: Buffer) => {
       if (gen !== rtpGeneration) return;
-      process.stderr.write(`[camera/rtp] ${d}`);
+      process.stderr.write(`[camera/rtp] ${redactRtspCredentials(String(d))}`);
       resetRtpWatchdog(gen);
     });
     rtpProc.on("close", (code) => {
