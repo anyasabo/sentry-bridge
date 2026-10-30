@@ -332,7 +332,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         const p = spawnFfmpeg([
           "-rtsp_transport",
           "tcp",
-          "-stimeout",
+          "-timeout",
           "8000000", // 8s RTSP-Socket-Timeout (Mikrosekunden) — innerer Wächter
           "-i",
           config.rtspUrl,
