@@ -283,6 +283,27 @@ describe("Camera", () => {
       jest.useRealTimers();
     });
 
+    it("removes RTSP credentials from the RTP ffmpeg's forwarded log", async () => {
+      const stderrWrite = jest
+        .spyOn(process.stderr, "write")
+        .mockImplementation(() => true);
+      const proc = makeMockProcess({
+        stderrData: [
+          "Input #0, rtsp, from 'rtsp://user:s3cret@10.0.0.1/live':",
+        ],
+      });
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.startRtpStream(5004);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const logged = stderrWrite.mock.calls.map(([chunk]) => chunk).join("");
+      stderrWrite.mockRestore();
+      camera.stopRtpStream();
+      expect(logged).toContain("rtsp://***@10.0.0.1/live");
+      expect(logged).not.toContain("s3cret");
+    });
+
     it("does not crash if stop() is called before start()", () => {
       const camera = createCamera(config);
       expect(() => camera.stop()).not.toThrow();
