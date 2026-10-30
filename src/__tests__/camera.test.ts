@@ -1,6 +1,8 @@
 import { EventEmitter } from "events";
 import { createCamera } from "../camera/camera";
 import { CameraConfig } from "../camera/types";
+import { healthMonitor } from "../lib/health";
+import { ErrorSeverity, HealthState } from "../lib/health-monitor";
 
 jest.mock("child_process");
 import * as cp from "child_process";
@@ -255,6 +257,29 @@ describe("Camera", () => {
       await expect(pending).rejects.toThrow("timed out");
       jest.advanceTimersByTime(5_000);
       expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
+      jest.useRealTimers();
+    });
+
+    it("reports the camera as recovering as soon as the watchdog fires", () => {
+      jest.useFakeTimers();
+      const setState = jest.spyOn(healthMonitor, "setState");
+      const pushError = jest.spyOn(healthMonitor, "pushError");
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+      proc.stdout!.emit("data", fakeJpeg);
+      setState.mockClear();
+
+      jest.advanceTimersByTime(10_000);
+      expect(setState).toHaveBeenCalledWith("camera", HealthState.RECOVERING);
+      expect(pushError).toHaveBeenCalledWith(
+        "camera",
+        expect.stringContaining("no frame"),
+        ErrorSeverity.ERROR
+      );
+
+      camera.stop();
       jest.useRealTimers();
     });
 
