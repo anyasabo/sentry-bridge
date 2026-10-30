@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { createCamera } from "../camera/camera";
 import { CameraConfig } from "../camera/types";
 import { healthMonitor } from "../lib/health";
+import * as metrics from "../lib/metrics";
 import { ErrorSeverity, HealthState } from "../lib/health-monitor";
 
 jest.mock("child_process");
@@ -328,6 +329,18 @@ describe("Camera", () => {
 
       expect(newProc.kill).toHaveBeenCalled();
       expect(mockSpawn).toHaveBeenCalledTimes(2);
+    });
+
+    it("records camera frames in the metrics", () => {
+      const record = jest.spyOn(metrics, "recordCameraFrame");
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+      proc.stdout!.emit("data", fakeJpeg);
+      expect(record).toHaveBeenCalledTimes(1);
+      camera.stop();
+      record.mockRestore();
     });
 
     it("does not crash if stop() is called before start()", () => {

@@ -1,4 +1,5 @@
 import { registerFrameForwarding } from "../bridge";
+import * as metrics from "../lib/metrics";
 
 const frame = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 
@@ -36,6 +37,19 @@ describe("registerFrameForwarding()", () => {
     await emit();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("HTTP 400"));
+  });
+
+  it("records each upload's result in the metrics", async () => {
+    const record = jest.spyOn(metrics, "recordFrameUpload");
+    const sendFrame = jest
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("HTTP 400"));
+    const { emit } = setup(sendFrame);
+    await emit();
+    await emit();
+    expect(record.mock.calls).toEqual([[true], [false]]);
+    record.mockRestore();
   });
 
   it("warns again after uploads recover and then fail", async () => {

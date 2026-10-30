@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from "child_process";
 import { CameraConfig, CameraModule } from "./types";
 import { createCircuitBreaker } from "../lib/circuit-breaker";
 import { calculateDelay } from "../lib/retry";
+import { recordCameraFrame } from "../lib/metrics";
 import { terminate } from "../lib/terminate";
 import { resilienceConfig } from "../lib/env-config";
 import { healthMonitor, circuitBreakerRegistry } from "../lib/health";
@@ -40,6 +41,7 @@ export function createCamera(config: CameraConfig): CameraModule {
   circuitBreakerRegistry.set("camera", cb);
 
   function emitFrame(frame: Buffer): void {
+    recordCameraFrame();
     if (frameCallback) frameCallback(frame);
     for (const cb of subscribers.values()) cb(frame);
   }

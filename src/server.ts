@@ -6,11 +6,13 @@ import { streamRouter } from "./routes/stream";
 import healthRouter from "./routes/health";
 import bridgeRouter from "./routes/bridge";
 import filesRouter from "./routes/files";
+import metricsRouter from "./routes/metrics";
 
 export const app = express();
 
 app.use(express.json());
 
+app.use("/metrics", metricsRouter);
 app.use("/api/health", healthRouter);
 app.use("/api/wizard", wizardRouter);
 app.use("/api/bridge", bridgeRouter);
