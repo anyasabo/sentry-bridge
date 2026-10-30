@@ -314,6 +314,22 @@ describe("Camera", () => {
       expect(logged).not.toContain("s3cret");
     });
 
+    it("keeps tracking the new ffmpeg when the old one closes late", () => {
+      const oldProc = makeMockProcess({});
+      const newProc = makeMockProcess({});
+      mockSpawn.mockReturnValueOnce(oldProc).mockReturnValueOnce(newProc);
+      const camera = createCamera(config);
+      camera.start();
+      camera.stop();
+      camera.start();
+
+      oldProc.emit("close", 0);
+      camera.stop();
+
+      expect(newProc.kill).toHaveBeenCalled();
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+    });
+
     it("does not crash if stop() is called before start()", () => {
       const camera = createCamera(config);
       expect(() => camera.stop()).not.toThrow();

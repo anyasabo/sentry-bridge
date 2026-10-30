@@ -31,6 +31,7 @@ export function createCamera(config: CameraConfig): CameraModule {
   const subscribers = new Map<symbol, (frame: Buffer) => void>();
 
   let mjpegStopped = false;
+  let mjpegGeneration = 0;
   let mjpegRestartAttempt = 0;
   let mjpegRestartTimer: ReturnType<typeof setTimeout> | null = null;
   let mjpegWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
@@ -78,6 +79,7 @@ export function createCamera(config: CameraConfig): CameraModule {
   }
 
   function spawnMjpeg(): void {
+    const gen = ++mjpegGeneration;
     cb.execute(
       () =>
         new Promise<void>((resolve, reject) => {
@@ -119,6 +121,11 @@ export function createCamera(config: CameraConfig): CameraModule {
           });
 
           proc.on("close", (code) => {
+            if (gen !== mjpegGeneration) {
+              // stale close event from a superseded process
+              if (!firstFrameSeen) resolve();
+              return;
+            }
             if (mjpegWatchdogTimer) {
               clearTimeout(mjpegWatchdogTimer);
               mjpegWatchdogTimer = null;
