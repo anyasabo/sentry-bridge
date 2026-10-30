@@ -170,6 +170,94 @@ describe("Camera", () => {
       expect(proc.kill).toHaveBeenCalled();
     });
 
+    it("escalates to SIGKILL when ffmpeg ignores the watchdog's SIGTERM", () => {
+      jest.useFakeTimers();
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+      proc.stdout!.emit("data", fakeJpeg);
+
+      jest.advanceTimersByTime(10_000);
+      expect(proc.kill).toHaveBeenCalledTimes(1);
+      expect(proc.kill).toHaveBeenLastCalledWith();
+
+      jest.advanceTimersByTime(5_000);
+      expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
+
+      camera.stop();
+      jest.useRealTimers();
+    });
+
+    it("does not SIGKILL when ffmpeg exits after the watchdog's SIGTERM", () => {
+      jest.useFakeTimers();
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+      proc.stdout!.emit("data", fakeJpeg);
+
+      jest.advanceTimersByTime(10_000);
+      proc.emit("close", 255);
+      jest.advanceTimersByTime(5_000);
+      expect(proc.kill).toHaveBeenCalledTimes(1);
+
+      camera.stop();
+      jest.useRealTimers();
+    });
+
+    it("escalates to SIGKILL when ffmpeg ignores SIGTERM on stop()", () => {
+      jest.useFakeTimers();
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+      camera.stop();
+      jest.advanceTimersByTime(5_000);
+      expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
+      jest.useRealTimers();
+    });
+
+    it("escalates to SIGKILL when the RTP ffmpeg ignores the watchdog", () => {
+      jest.useFakeTimers();
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.startRtpStream(5004);
+
+      jest.advanceTimersByTime(30_000);
+      expect(proc.kill).toHaveBeenCalledTimes(1);
+      jest.advanceTimersByTime(5_000);
+      expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
+
+      camera.stopRtpStream();
+      jest.useRealTimers();
+    });
+
+    it("escalates to SIGKILL when the RTP ffmpeg ignores SIGTERM on stop", () => {
+      jest.useFakeTimers();
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.startRtpStream(5004);
+      camera.stopRtpStream();
+      jest.advanceTimersByTime(5_000);
+      expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
+      jest.useRealTimers();
+    });
+
+    it("escalates to SIGKILL when ffmpeg ignores testStream()'s timeout", async () => {
+      jest.useFakeTimers();
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const pending = createCamera(config).testStream(1000);
+      jest.advanceTimersByTime(1000);
+      await expect(pending).rejects.toThrow("timed out");
+      jest.advanceTimersByTime(5_000);
+      expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
+      jest.useRealTimers();
+    });
+
     it("does not crash if stop() is called before start()", () => {
       const camera = createCamera(config);
       expect(() => camera.stop()).not.toThrow();
