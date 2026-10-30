@@ -17,6 +17,7 @@ import {
   healthMonitor,
   circuitBreakerRegistry,
 } from "./lib/health";
+import { recordFrameUpload } from "./lib/metrics";
 import { HealthState } from "./lib/health-monitor";
 import type { ComponentName } from "./lib/health-monitor";
 
@@ -164,9 +165,11 @@ export function registerFrameForwarding(
     lastUpload = now;
     try {
       await agent.sendFrame(frame);
+      recordFrameUpload(true);
       if (uploadFailing) console.log("[bridge] Frame uploads recovered");
       uploadFailing = false;
     } catch (err) {
+      recordFrameUpload(false);
       // non-fatal, but without frames Obico detects nothing, so say so once
       if (!uploadFailing) {
         const reason = err instanceof Error ? err.message : String(err);

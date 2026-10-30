@@ -158,6 +158,26 @@ These are intentional product decisions, not bugs:
 - **RTSP camera is mandatory.** Obico's AI failure detection requires a live stream — there is no "disable camera" mode.
 - **Manual printer controls are limited to pause / resume / cancel.** The PrusaLink API does not expose file upload, filament load/unload, or print queue management, so the bridge does not either.
 
+## Metrics
+
+`GET /metrics` serves Prometheus metrics on the web UI port, with no login. Keep the port off untrusted networks, as with the rest of the UI.
+
+| Metric                                                      | Meaning                               |
+| ----------------------------------------------------------- | ------------------------------------- |
+| `sentry_bridge_camera_last_frame_timestamp_seconds`         | When the camera last produced a frame |
+| `sentry_bridge_frame_upload_last_success_timestamp_seconds` | When Obico last accepted a frame      |
+| `sentry_bridge_frame_uploads_total{result}`                 | Frame uploads, `success` or `failure` |
+| `sentry_bridge_component_state{component,state}`            | 1 on each component's current state   |
+| `sentry_bridge_component_restarts_total{component}`         | Restarts per component                |
+
+Node.js process metrics are included. Frames are uploaded while the printer is idle too, so failure detection has stopped if the last upload gets old:
+
+```yaml
+- alert: SentryBridgeNoFrames
+  expr: time() - sentry_bridge_frame_upload_last_success_timestamp_seconds > 120
+  for: 3m
+```
+
 ## Troubleshooting
 
 ### 1. PrusaLink auth fails (401)
