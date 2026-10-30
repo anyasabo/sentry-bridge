@@ -6,6 +6,8 @@ import { resilienceConfig } from "../lib/env-config";
 import { healthMonitor, circuitBreakerRegistry } from "../lib/health";
 import { HealthState, ErrorSeverity } from "../lib/health-monitor";
 
+function discard(): void {}
+
 export function createCamera(config: CameraConfig): CameraModule {
   let proc: ChildProcess | null = null;
   let rtpProc: ChildProcess | null = null;
@@ -35,8 +37,13 @@ export function createCamera(config: CameraConfig): CameraModule {
     for (const cb of subscribers.values()) cb(frame);
   }
 
+  // Every pipe must be read: once one is full, ffmpeg blocks on its next write
+  // to it. Blocked on stderr, ffmpeg stops producing output at its next log
+  // message, which can take hours to arrive.
   function spawnFfmpeg(args: string[]): ChildProcess {
-    return spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+    child.stderr!.on("data", discard);
+    return child;
   }
 
   function resetMjpegWatchdog(): void {
@@ -168,6 +175,7 @@ export function createCamera(config: CameraConfig): CameraModule {
       "rtp",
       `rtp://127.0.0.1:${port}?pkt_size=1300`,
     ]);
+    rtpProc.stdout!.on("data", discard);
     rtpProc.stderr!.on("data", (d: Buffer) => {
       if (gen !== rtpGeneration) return;
       process.stderr.write(`[camera/rtp] ${d}`);
