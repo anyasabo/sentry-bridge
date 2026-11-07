@@ -30,7 +30,6 @@ export function createObicoAgent(
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let disconnecting = false;
   let activePrintFileId: number | null = null;
-  let printStartTs: number | null = null;
   let lastPrintState: string | null = null;
   let cachedJob: JobInfo | null = null;
 
@@ -507,8 +506,6 @@ export function createObicoAgent(
         cachedJob = job;
       }
 
-      const isActiveState =
-        status.state === "PRINTING" || status.state === "PAUSED";
       const wasActiveState =
         lastPrintState === "PRINTING" || lastPrintState === "PAUSED";
       const isFinishingOrFinished =
@@ -516,22 +513,15 @@ export function createObicoAgent(
       const wasFinishingState =
         lastPrintState === "FINISHED" || lastPrintState === "FINISHING";
 
-      // Track print start timestamp — set once when print begins, stable for entire print
-      let shouldResetAfterSend = false;
-      if (isActiveState && !wasActiveState) {
-        printStartTs = Math.floor(Date.now() / 1000);
-      } else if (
+      // Reset AFTER sending — only when transitioning to true IDLE.
+      // FINISHED is a long-lived state on Prusa Core One (printer waits for
+      // user to acknowledge at panel before moving to IDLE). Every FINISHED
+      // poll must keep the cached job context, otherwise file.name goes null
+      // on subsequent ticks and Obico's UI flickers between "has file" and
+      // "no file" → inconsistent display.
+      const shouldResetAfterSend =
         (status.state === "IDLE" || status.state === "STOPPED") &&
-        (wasActiveState || wasFinishingState)
-      ) {
-        // Reset AFTER sending — only when transitioning to true IDLE.
-        // FINISHED is a long-lived state on Prusa Core One (printer waits for
-        // user to acknowledge at panel before moving to IDLE). Every FINISHED
-        // poll must keep the cached job context, otherwise file.name goes null
-        // on subsequent ticks and Obico's UI flickers between "has file" and
-        // "no file" → inconsistent display.
-        shouldResetAfterSend = true;
-      }
+        (wasActiveState || wasFinishingState);
 
       // During FINISHING or FINISHED, use cached job if no fresh job available
       const effectiveJob = job ?? (isFinishingOrFinished ? cachedJob : null);
@@ -548,8 +538,7 @@ export function createObicoAgent(
         status,
         effectiveJob,
         config.streamUrl,
-        activePrintFileId,
-        printStartTs
+        activePrintFileId
       );
       const json = JSON.stringify(msg);
 
@@ -573,7 +562,6 @@ export function createObicoAgent(
 
       // Reset print context AFTER sending — the Done tick needs full job context
       if (shouldResetAfterSend) {
-        printStartTs = null;
         cachedJob = null;
       }
     },
