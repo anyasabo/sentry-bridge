@@ -99,13 +99,7 @@ describe("buildStatusMessage()", () => {
   });
 
   it("reflects PRINTING state with job info", () => {
-    const msg = buildStatusMessage(
-      printingStatus,
-      activeJob,
-      undefined,
-      null,
-      activeJob.id
-    );
+    const msg = buildStatusMessage(printingStatus, activeJob);
     expect(msg.status.state.text).toBe("Printing");
     expect(msg.status.state.flags.printing).toBe(true);
     expect(msg.current_print_ts).toBe(activeJob.id);
@@ -115,8 +109,13 @@ describe("buildStatusMessage()", () => {
     expect(msg.status.temperatures.bed.actual).toBe(25.0);
   });
 
-  it("sends current_print_ts null while printing with no print id", () => {
+  it("sends current_print_ts null while printing with no job", () => {
     const msg = buildStatusMessage(printingStatus, null);
+    expect(msg.current_print_ts).toBeNull();
+  });
+
+  it("sends current_print_ts null in BUSY, which can occur during a print", () => {
+    const msg = buildStatusMessage({ ...idleStatus, state: "BUSY" }, null);
     expect(msg.current_print_ts).toBeNull();
   });
 
@@ -132,10 +131,7 @@ describe("buildStatusMessage()", () => {
   it("reflects FINISHED state — finishing flag true, current_print_ts=-1 (Print Done signal)", () => {
     const msg = buildStatusMessage(
       { ...idleStatus, state: "FINISHED" },
-      activeJob,
-      undefined,
-      null,
-      activeJob.id
+      activeJob
     );
     expect(msg.status.state.text).toBe("Operational");
     expect(msg.status.state.flags.finishing).toBe(true);
@@ -173,10 +169,7 @@ describe("buildStatusMessage()", () => {
   it("FINISHING state sets finishing flag and preserves current_print_ts", () => {
     const msg = buildStatusMessage(
       { ...idleStatus, state: "FINISHING" },
-      activeJob,
-      undefined,
-      null,
-      activeJob.id
+      activeJob
     );
     expect(msg.status.state.text).toBe("Finishing");
     expect(msg.status.state.flags.finishing).toBe(true);
@@ -211,18 +204,12 @@ describe("buildStatusMessage()", () => {
     expect(msgFallback.status.progress.currentZ).toBe(2.0);
   });
 
-  it("FINISHING with null job still produces valid message with finishing flag and preserved ts", () => {
-    const msg = buildStatusMessage(
-      { ...idleStatus, state: "FINISHING" },
-      null,
-      undefined,
-      null,
-      activeJob.id
-    );
+  it("FINISHING with null job still produces valid message with finishing flag and unknown ts", () => {
+    const msg = buildStatusMessage({ ...idleStatus, state: "FINISHING" }, null);
     expect(msg.status.state.flags.finishing).toBe(true);
     expect(msg.status.progress.currentLayer).toBeNull();
     expect(msg.status.progress.totalLayers).toBeNull();
-    expect(msg.current_print_ts).toBe(activeJob.id);
+    expect(msg.current_print_ts).toBeNull();
   });
 });
 
@@ -1924,6 +1911,7 @@ describe("current_print_ts", () => {
 
   const attentionStatus: PrinterStatus = { ...idleStatus, state: "ATTENTION" };
   const pausedStatus: PrinterStatus = { ...idleStatus, state: "PAUSED" };
+  const busyStatus: PrinterStatus = { ...idleStatus, state: "BUSY" };
   const finishedStatus: PrinterStatus = { ...idleStatus, state: "FINISHED" };
   const job41: JobInfo = { ...activeJob, id: 41 };
   const job42: JobInfo = { ...activeJob, id: 42 };
@@ -1942,15 +1930,25 @@ describe("current_print_ts", () => {
     ).toEqual([null, 41]);
   });
 
-  it("keeps the id through ATTENTION and PAUSED, with no fresh job", async () => {
+  it("keeps the id through ATTENTION and PAUSED", async () => {
     expect(
       await run([
         [printingStatus, job41],
-        [attentionStatus, null],
-        [pausedStatus, null],
+        [attentionStatus, job41],
+        [pausedStatus, job41],
         [printingStatus, job41],
       ])
     ).toEqual([41, 41, 41, 41]);
+  });
+
+  it("does not end the print in BUSY (e.g. crash recovery)", async () => {
+    expect(
+      await run([
+        [printingStatus, job41],
+        [busyStatus, null],
+        [printingStatus, job41],
+      ])
+    ).toEqual([41, null, 41]);
   });
 
   it("gives the next print its own id, even straight from FINISHED", async () => {

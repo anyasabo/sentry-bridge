@@ -506,34 +506,12 @@ export function createObicoAgent(
         cachedJob = job;
       }
 
-      // ATTENTION (e.g. a filament runout) pauses the print; it must not start a new one.
       const wasActiveState =
-        lastPrintState === "PRINTING" ||
-        lastPrintState === "PAUSED" ||
-        lastPrintState === "ATTENTION";
+        lastPrintState === "PRINTING" || lastPrintState === "PAUSED";
       const isFinishingOrFinished =
         status.state === "FINISHING" || status.state === "FINISHED";
       const wasFinishingState =
         lastPrintState === "FINISHED" || lastPrintState === "FINISHING";
-
-      // Obico identifies a print by current_print_ts alone: it stores it as Print.ext_id, takes the
-      // start time from its own clock, and starts a new print whenever the value changes. PrusaLink's
-      // job id is that identity. The printer keeps the counter in EEPROM and increments it before
-      // each print, so it is the same across a restart of this bridge, a pause or an attention
-      // prompt, and the next print gets the next id. The cached job only carries over within one
-      // print, never into the next one.
-      // While the job is not known (a 204 from /api/v1/job racing the status poll), send null:
-      // Obico keeps the status but leaves its current print alone. -1 would end that print and a
-      // made-up value would start a new one.
-      // Limits: Obico ignores an id of 0 and refuses an id it has already ended, so after an EEPROM
-      // or factory reset restarts the counter, prints whose id an old print already used are not
-      // tracked until the ids pass it (delete those prints in Obico, or re-link the printer). It also
-      // merges two prints of the same file whose ids are within 20 if it never saw the first one end
-      // (e.g. the bridge was down between them).
-      const printId =
-        job?.id ??
-        (wasActiveState || isFinishingOrFinished ? cachedJob?.id : null) ??
-        null;
 
       // Reset AFTER sending — only when transitioning to true IDLE.
       // FINISHED is a long-lived state on Prusa Core One (printer waits for
@@ -560,8 +538,7 @@ export function createObicoAgent(
         status,
         effectiveJob,
         config.streamUrl,
-        activePrintFileId,
-        printId
+        activePrintFileId
       );
       const json = JSON.stringify(msg);
 

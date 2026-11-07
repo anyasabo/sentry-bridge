@@ -182,7 +182,7 @@ The `auth_token` (nested under `printer.auth_token`) is stored as `apiKey` in `c
 
 **Notes:**
 
-- `current_print_ts`: identifies the print to Obico, which starts a new print whenever it changes. While printing, paused, in attention or finishing, the bridge sends PrusaLink's job id (`/api/v1/job` `id`, kept in the printer's EEPROM, so it survives a restart of the bridge), or `null` while the job is not known yet. Otherwise `-1`.
+- `current_print_ts`: identifies the print to Obico, which starts a new print when the value changes. While printing, paused, in attention or finishing, the bridge sends PrusaLink's job id (`/api/v1/job` `id`). The printer keeps the job id in EEPROM, so it survives a restart of the bridge. While the job is not known, and in `BUSY` (which can occur during a print), the bridge sends `null`. Otherwise `-1`.
 - `event` field is optional — only present on state transitions.
 - Status is also POSTed to `{obicoServerUrl}/api/v1/octo/ping/` as HTTP fallback.
 

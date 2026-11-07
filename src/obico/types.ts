@@ -113,17 +113,11 @@ export interface ObicoAgent {
   setJanusUrl(url: string): void;
 }
 
-/**
- * @param printId Identifies the print to Obico (current_print_ts) while one is printing, paused or
- *   finishing: PrusaLink's job id, or null while it is not known, which Obico treats as "unknown"
- *   and leaves its current print alone. Every other state sends -1 (no print).
- */
 export function buildStatusMessage(
   status: PrinterStatus,
   job: JobInfo | null,
   streamUrl?: string,
-  fileId?: number | null,
-  printId: number | null = null
+  fileId?: number | null
 ): PrinterStatusMessage {
   const now = Math.floor(Date.now() / 1000);
   const isPrinting = status.state === "PRINTING";
@@ -148,7 +142,18 @@ export function buildStatusMessage(
     : null;
 
   return {
-    current_print_ts: isPrinting || isPaused || isFinishing ? printId : -1,
+    // Obico stores current_print_ts as Print.ext_id and starts a new print when it changes.
+    // PrusaLink's job id stays the same for one print, also across a restart of the bridge.
+    // null means "unknown": Obico keeps its current print. -1 ends the current print.
+    // BUSY can occur during a print (e.g. crash recovery), so it must not end the print.
+    // Limit: Obico refuses the id of an ended print. If the printer's 16-bit job counter wraps
+    // or is reset, Obico does not track prints whose ids repeat.
+    current_print_ts:
+      isPrinting || isPaused || isFinishing
+        ? (job?.id ?? null)
+        : status.state === "BUSY"
+          ? null
+          : -1,
     ...(webcamEntry ? { settings: { webcams: [webcamEntry] } } : {}),
     status: {
       _ts: now,
