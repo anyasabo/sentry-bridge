@@ -147,7 +147,7 @@ Sent over WebSocket as JSON. Routine interval: **30 seconds**. Sent immediately 
 
 **Notes:**
 
-- `current_print_ts`: Unix timestamp if printing, `null` if idle/offline
+- `current_print_ts`: identifies the current print; agents send the print's start time as a Unix timestamp. Obico stores it as `Print.ext_id` (an integer) and only compares it for equality, so any stable integer works. `-1` = not printing (ends the current print); missing, `null` or `0` = status unknown (the current print is left alone)
 - `state.text`: Human-readable state string (`Printing`, `Paused`, `Operational`, `Offline`)
 - `event` field is optional — only present on state transitions
 - Status is also POSTed to `/api/v1/octo/ping/` as HTTP fallback

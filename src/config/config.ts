@@ -30,7 +30,7 @@ export function getBridgeUrl(config: Config, port: number): string {
   return config.bridgeUrl ?? detectBridgeUrl(port);
 }
 
-export function configPath(): string {
+function configPath(): string {
   return process.env.CONFIG_PATH ?? "/config/config.json";
 }
 

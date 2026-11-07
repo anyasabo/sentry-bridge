@@ -5,7 +5,6 @@ import { createObicoAgent } from "../obico/agent";
 import { ObicoAgentConfig, PrusaLinkCommandDispatcher } from "../obico/types";
 import { PrinterStatus, JobInfo } from "../prusalink/types";
 import { buildStatusMessage } from "../obico/types";
-import { PrintSession, PrintSessionStore } from "../obico/print-session";
 import { Readable } from "node:stream";
 
 // Mock node:fs so download tests don't touch the real filesystem
@@ -21,13 +20,6 @@ jest.mock("node:fs", () => ({
   ),
   statSync: jest.fn(() => ({ size: 100 })),
   unlinkSync: jest.fn(),
-  // print-session.ts: the default file store finds no session and writes nothing.
-  readFileSync: jest.fn(() => {
-    throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-  }),
-  mkdirSync: jest.fn(),
-  renameSync: jest.fn(),
-  rmSync: jest.fn(),
 }));
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -107,14 +99,25 @@ describe("buildStatusMessage()", () => {
   });
 
   it("reflects PRINTING state with job info", () => {
-    const msg = buildStatusMessage(printingStatus, activeJob);
+    const msg = buildStatusMessage(
+      printingStatus,
+      activeJob,
+      undefined,
+      null,
+      activeJob.id
+    );
     expect(msg.status.state.text).toBe("Printing");
     expect(msg.status.state.flags.printing).toBe(true);
-    expect(msg.current_print_ts).not.toBeNull();
+    expect(msg.current_print_ts).toBe(activeJob.id);
     expect(msg.status.job.file.name).toBe("benchy_0.2mm.gcode");
     expect(msg.status.progress.completion).toBe(42.5);
     expect(msg.status.temperatures.tool0.actual).toBe(26.0);
     expect(msg.status.temperatures.bed.actual).toBe(25.0);
+  });
+
+  it("sends current_print_ts null while printing with no print id", () => {
+    const msg = buildStatusMessage(printingStatus, null);
+    expect(msg.current_print_ts).toBeNull();
   });
 
   it("reflects PAUSED state", () => {
@@ -127,13 +130,12 @@ describe("buildStatusMessage()", () => {
   });
 
   it("reflects FINISHED state — finishing flag true, current_print_ts=-1 (Print Done signal)", () => {
-    const printTs = Math.floor(Date.now() / 1000) - 3600;
     const msg = buildStatusMessage(
       { ...idleStatus, state: "FINISHED" },
       activeJob,
       undefined,
       null,
-      printTs
+      activeJob.id
     );
     expect(msg.status.state.text).toBe("Operational");
     expect(msg.status.state.flags.finishing).toBe(true);
@@ -169,18 +171,17 @@ describe("buildStatusMessage()", () => {
   });
 
   it("FINISHING state sets finishing flag and preserves current_print_ts", () => {
-    const printTs = Math.floor(Date.now() / 1000) - 600;
     const msg = buildStatusMessage(
       { ...idleStatus, state: "FINISHING" },
       activeJob,
       undefined,
       null,
-      printTs
+      activeJob.id
     );
     expect(msg.status.state.text).toBe("Finishing");
     expect(msg.status.state.flags.finishing).toBe(true);
     expect(msg.status.state.flags.printing).toBe(false);
-    expect(msg.current_print_ts).toBe(printTs);
+    expect(msg.current_print_ts).toBe(activeJob.id);
   });
 
   it("maps job.currentLayer/totalLayers into progress", () => {
@@ -211,18 +212,17 @@ describe("buildStatusMessage()", () => {
   });
 
   it("FINISHING with null job still produces valid message with finishing flag and preserved ts", () => {
-    const printTs = Math.floor(Date.now() / 1000) - 300;
     const msg = buildStatusMessage(
       { ...idleStatus, state: "FINISHING" },
       null,
       undefined,
       null,
-      printTs
+      activeJob.id
     );
     expect(msg.status.state.flags.finishing).toBe(true);
     expect(msg.status.progress.currentLayer).toBeNull();
     expect(msg.status.progress.totalLayers).toBeNull();
-    expect(msg.current_print_ts).toBe(printTs);
+    expect(msg.current_print_ts).toBe(activeJob.id);
   });
 });
 
@@ -1608,7 +1608,7 @@ describe("http.tunnelv2 handler", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// FINISHING state: Job-Context-Caching and printStartTs persistence (Gap 1 fix)
+// FINISHING state: Job-Context-Caching and print id persistence (Gap 1 fix)
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("FINISHING state handling", () => {
@@ -1626,7 +1626,7 @@ describe("FINISHING state handling", () => {
     wss.close(done);
   });
 
-  it("preserves printStartTs and job context across PRINTING → FINISHING → IDLE", (done) => {
+  it("preserves the print id and job context across PRINTING → FINISHING → IDLE", (done) => {
     const agent = createObicoAgent(
       { serverUrl: `http://localhost:${port}`, apiKey: "key" },
       mockHttp,
@@ -1661,15 +1661,15 @@ describe("FINISHING state handling", () => {
     });
 
     setTimeout(() => {
-      // Step 1: PRINTING with job — sets printStartTs and caches job
+      // Step 1: PRINTING with job — caches job
       agent.sendStatus(printingStatus, printingJob);
 
       setTimeout(() => {
-        // Step 2: FINISHING with job=null — must use cached job + preserve printStartTs
+        // Step 2: FINISHING with job=null — must use cached job and its id
         agent.sendStatus(finishingStatus, null);
 
         setTimeout(() => {
-          // Step 3: IDLE — resets printStartTs and cachedJob
+          // Step 3: IDLE — resets cachedJob
           agent.sendStatus(idleStatus, null);
 
           setTimeout(() => {
@@ -1690,7 +1690,7 @@ describe("FINISHING state handling", () => {
             // Second message (FINISHING) must have:
             const finishingMsg = statusMsgs[1];
             expect(finishingMsg.status.state.flags.finishing).toBe(true);
-            expect(finishingMsg.current_print_ts).toBeGreaterThan(0);
+            expect(finishingMsg.current_print_ts).toBe(printingJob.id);
             expect(finishingMsg.status.job.file.name).toBe("test_0.2mm.gcode");
 
             // Third message (IDLE) must have current_print_ts === -1
@@ -1740,7 +1740,7 @@ describe("FINISHING state handling", () => {
     });
 
     setTimeout(() => {
-      // Step 1: PRINTING with job — sets printStartTs and caches job
+      // Step 1: PRINTING with job — caches job
       agent.sendStatus(printingStatus, printingJob);
 
       setTimeout(() => {
@@ -1876,10 +1876,10 @@ describe("FINISHING state handling", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// current_print_ts across a restart of the bridge
+// current_print_ts is PrusaLink's job id, so it survives a restart of the bridge
 // ──────────────────────────────────────────────────────────────────────────────
 
-describe("print session across a restart", () => {
+describe("current_print_ts", () => {
   let wss: WebSocketServer;
   let port: number;
   const sockets: WebSocket[] = [];
@@ -1893,134 +1893,74 @@ describe("print session across a restart", () => {
   });
 
   afterEach((done) => {
-    jest.restoreAllMocks();
     wss.close(done);
   });
 
-  function memoryStore(): PrintSessionStore & { session: PrintSession | null } {
-    return {
-      session: null,
-      load() {
-        return this.session;
-      },
-      save(s) {
-        this.session = { ...s };
-      },
-      clear() {
-        this.session = null;
-      },
-    };
-  }
-
-  // One agent (one run of the bridge): connect, send each status, and return what Obico received.
+  // One agent (one run of the bridge): connect, send each status, and return the
+  // current_print_ts of every status message Obico received.
   async function run(
-    store: PrintSessionStore,
-    nowMs: number,
-    // An optional third element moves the clock to that time before the status.
-    statuses: Array<[PrinterStatus, JobInfo | null, number?]>
-  ): Promise<Array<{ current_print_ts: number }>> {
-    jest.spyOn(Date, "now").mockReturnValue(nowMs);
+    statuses: Array<[PrinterStatus, JobInfo | null]>
+  ): Promise<Array<number | null>> {
     const agent = createObicoAgent(
       { serverUrl: `http://localhost:${port}`, apiKey: "key" },
       mockHttp,
-      mockDispatcher,
-      store
+      mockDispatcher
     );
     const before = sockets.length;
     agent.connect();
     while (sockets.length === before)
       await new Promise((r) => setTimeout(r, 10));
-    const received: Array<{ current_print_ts: number }> = [];
+    const received: Array<number | null> = [];
     sockets[before].on("message", (d) => {
       const msg = JSON.parse(d.toString());
-      if (msg.status) received.push(msg);
+      if (msg.status) received.push(msg.current_print_ts);
     });
     await new Promise((r) => setTimeout(r, 20));
-    for (const [status, job, at] of statuses) {
-      if (at !== undefined) jest.spyOn(Date, "now").mockReturnValue(at);
-      agent.sendStatus(status, job);
-    }
-    while (received.length < statuses.length)
-      await new Promise((r) => setTimeout(r, 10));
+    for (const [status, job] of statuses) agent.sendStatus(status, job);
+    await new Promise((r) => setTimeout(r, 50));
     agent.disconnect();
-    jest.restoreAllMocks();
     return received;
   }
 
-  it("keeps current_print_ts when the bridge restarts during the same job", async () => {
-    const store = memoryStore();
-    const [first] = await run(store, 1_800_000_000_000, [
-      [printingStatus, activeJob],
-    ]);
-    expect(first.current_print_ts).toBe(1_800_000_000);
-    // Ten minutes later, a new bridge process: same PrusaLink job.
-    const job = { ...activeJob, timePrinting: activeJob.timePrinting + 600 };
-    const [after] = await run(store, 1_800_000_600_000, [
-      [printingStatus, job],
-    ]);
-    expect(after.current_print_ts).toBe(1_800_000_000);
+  const attentionStatus: PrinterStatus = { ...idleStatus, state: "ATTENTION" };
+  const pausedStatus: PrinterStatus = { ...idleStatus, state: "PAUSED" };
+  const finishedStatus: PrinterStatus = { ...idleStatus, state: "FINISHED" };
+  const job41: JobInfo = { ...activeJob, id: 41 };
+  const job42: JobInfo = { ...activeJob, id: 42 };
+
+  it("sends the job id, the same before and after a restart", async () => {
+    expect(await run([[printingStatus, job41]])).toEqual([41]);
+    expect(await run([[printingStatus, job41]])).toEqual([41]);
   });
 
-  it("keeps it when the first poll after the restart has no job yet", async () => {
-    const store = memoryStore();
-    await run(store, 1_800_000_000_000, [[printingStatus, activeJob]]);
-    const msgs = await run(store, 1_800_000_600_000, [
-      [printingStatus, null],
-      [printingStatus, activeJob],
-    ]);
-    expect(msgs.map((m) => m.current_print_ts)).toEqual([
-      1_800_000_000, 1_800_000_000,
-    ]);
+  it("sends null, not -1 or a new value, until a restarted bridge knows the job", async () => {
+    expect(
+      await run([
+        [printingStatus, null],
+        [printingStatus, job41],
+      ])
+    ).toEqual([null, 41]);
   });
 
-  it("starts a new timestamp for another job even without IDLE in between", async () => {
-    const store = memoryStore();
-    await run(store, 1_800_000_000_000, [[printingStatus, activeJob]]);
-    // The bridge was down while job 1 ended and job 2 started.
-    const msgs = await run(store, 1_800_000_600_000, [
-      [printingStatus, null],
-      [printingStatus, { ...activeJob, id: 2 }],
-      [
-        { ...idleStatus, state: "FINISHED" },
-        { ...activeJob, id: 2 },
-      ],
-      [printingStatus, { ...activeJob, id: 3 }, 1_800_000_900_000],
-    ]);
-    expect(msgs.map((m) => m.current_print_ts)).toEqual([
-      1_800_000_000, // job not known yet: assumed to be the saved print
-      1_800_000_600,
-      -1,
-      1_800_000_900,
-    ]);
-    expect(store.session).toEqual({ jobId: 3, startTs: 1_800_000_900 });
+  it("keeps the id through ATTENTION and PAUSED, with no fresh job", async () => {
+    expect(
+      await run([
+        [printingStatus, job41],
+        [attentionStatus, null],
+        [pausedStatus, null],
+        [printingStatus, job41],
+      ])
+    ).toEqual([41, 41, 41, 41]);
   });
 
-  it("keeps the timestamp through ATTENTION and pause", async () => {
-    const store = memoryStore();
-    const msgs = await run(store, 1_800_000_000_000, [
-      [printingStatus, activeJob],
-      [{ ...idleStatus, state: "ATTENTION" }, activeJob],
-      [{ ...idleStatus, state: "PAUSED" }, activeJob],
-      [printingStatus, activeJob],
-    ]);
-    expect(new Set(msgs.map((m) => m.current_print_ts))).toEqual(
-      new Set([1_800_000_000])
-    );
-  });
-
-  it("starts a new timestamp for another job, and forgets the session at IDLE", async () => {
-    const store = memoryStore();
-    await run(store, 1_800_000_000_000, [[printingStatus, activeJob]]);
-    const [other] = await run(store, 1_800_000_600_000, [
-      [printingStatus, { ...activeJob, id: 2 }],
-    ]);
-    expect(other.current_print_ts).toBe(1_800_000_600);
-    expect(store.session).toEqual({ jobId: 2, startTs: 1_800_000_600 });
-
-    await run(store, 1_800_000_700_000, [
-      [printingStatus, { ...activeJob, id: 2 }],
-      [idleStatus, null],
-    ]);
-    expect(store.session).toBeNull();
+  it("gives the next print its own id, even straight from FINISHED", async () => {
+    expect(
+      await run([
+        [printingStatus, job41],
+        [finishedStatus, null],
+        [printingStatus, null],
+        [printingStatus, job42],
+      ])
+    ).toEqual([41, -1, null, 42]);
   });
 });
