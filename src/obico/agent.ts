@@ -17,11 +17,13 @@ import { calculateDelay } from "../lib/retry";
 import { resilienceConfig } from "../lib/env-config";
 import { healthMonitor, circuitBreakerRegistry } from "../lib/health";
 import { HealthState, ErrorSeverity } from "../lib/health-monitor";
+import { PrintSessionStore, filePrintSessionStore } from "./print-session";
 
 export function createObicoAgent(
   config: ObicoAgentConfig,
   http: HttpFetcher,
-  dispatcher: PrusaLinkCommandDispatcher
+  dispatcher: PrusaLinkCommandDispatcher,
+  printSession: PrintSessionStore = filePrintSessionStore()
 ): ObicoAgent {
   const cb = createCircuitBreaker(resilienceConfig.circuitBreaker);
   circuitBreakerRegistry.set("obico_ws", cb);
@@ -31,6 +33,8 @@ export function createObicoAgent(
   let disconnecting = false;
   let activePrintFileId: number | null = null;
   let printStartTs: number | null = null;
+  // The PrusaLink job printStartTs belongs to, once known; null until then.
+  let printJobId: number | null = null;
   let lastPrintState: string | null = null;
   let cachedJob: JobInfo | null = null;
 
@@ -507,10 +511,15 @@ export function createObicoAgent(
         cachedJob = job;
       }
 
+      // ATTENTION (e.g. a filament runout) pauses the print; it must not start a new one.
       const isActiveState =
-        status.state === "PRINTING" || status.state === "PAUSED";
+        status.state === "PRINTING" ||
+        status.state === "PAUSED" ||
+        status.state === "ATTENTION";
       const wasActiveState =
-        lastPrintState === "PRINTING" || lastPrintState === "PAUSED";
+        lastPrintState === "PRINTING" ||
+        lastPrintState === "PAUSED" ||
+        lastPrintState === "ATTENTION";
       const isFinishingOrFinished =
         status.state === "FINISHING" || status.state === "FINISHED";
       const wasFinishingState =
@@ -519,7 +528,11 @@ export function createObicoAgent(
       // Track print start timestamp — set once when print begins, stable for entire print
       let shouldResetAfterSend = false;
       if (isActiveState && !wasActiveState) {
-        printStartTs = Math.floor(Date.now() / 1000);
+        // A restarted bridge may not know the job yet: assume the saved print goes on until it does.
+        printStartTs =
+          (lastPrintState === null ? printSession.load()?.startTs : null) ??
+          Math.floor(Date.now() / 1000);
+        printJobId = null;
       } else if (
         (status.state === "IDLE" || status.state === "STOPPED") &&
         (wasActiveState || wasFinishingState)
@@ -531,6 +544,19 @@ export function createObicoAgent(
         // on subsequent ticks and Obico's UI flickers between "has file" and
         // "no file" → inconsistent display.
         shouldResetAfterSend = true;
+      }
+
+      // Once the job is known: the saved job keeps its timestamp (the bridge restarted mid-print),
+      // so Obico keeps one print. Any other job is a new print, even without an IDLE in between.
+      if (isActiveState && job !== null && printJobId !== job.id) {
+        const saved = printSession.load();
+        if (saved?.jobId === job.id) {
+          printStartTs = saved.startTs;
+        } else {
+          printStartTs = Math.floor(Date.now() / 1000);
+          printSession.save({ jobId: job.id, startTs: printStartTs });
+        }
+        printJobId = job.id;
       }
 
       // During FINISHING or FINISHED, use cached job if no fresh job available
@@ -574,7 +600,9 @@ export function createObicoAgent(
       // Reset print context AFTER sending — the Done tick needs full job context
       if (shouldResetAfterSend) {
         printStartTs = null;
+        printJobId = null;
         cachedJob = null;
+        printSession.clear();
       }
     },
 
