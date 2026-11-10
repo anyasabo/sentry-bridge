@@ -65,6 +65,8 @@ export function createCamera(config: CameraConfig): CameraModule {
   let mjpegWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
   let mjpegStderr: StderrTail | null = null;
   const MJPEG_WATCHDOG_MS = 10_000;
+  // RTSP connect plus first decoded frame can take well over the frame gap.
+  const MJPEG_FIRST_FRAME_MS = 30_000;
 
   let rtpStopped = false;
   let rtpRestartAttempt = 0;
@@ -103,11 +105,11 @@ export function createCamera(config: CameraConfig): CameraModule {
     );
   }
 
-  function resetMjpegWatchdog(): void {
+  function resetMjpegWatchdog(timeoutMs = MJPEG_WATCHDOG_MS): void {
     if (mjpegWatchdogTimer) clearTimeout(mjpegWatchdogTimer);
     mjpegWatchdogTimer = setTimeout(() => {
       if (mjpegStopped) return;
-      const msg = `MJPEG watchdog: no frame for ${MJPEG_WATCHDOG_MS / 1000}s`;
+      const msg = `MJPEG watchdog: no frame for ${timeoutMs / 1000}s`;
       console.warn(`[camera] ${msg} — killing ffmpeg`);
       logMjpegStderr();
       healthMonitor.setState("camera", HealthState.RECOVERING);
@@ -116,7 +118,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         terminate(proc);
         proc = null;
       }
-    }, MJPEG_WATCHDOG_MS);
+    }, timeoutMs);
   }
 
   function spawnMjpeg(): void {
@@ -143,7 +145,7 @@ export function createCamera(config: CameraConfig): CameraModule {
           ]);
           mjpegStderr = trackStderrTail(proc);
           // Armed before the first frame too: ffmpeg can hang while connecting.
-          resetMjpegWatchdog();
+          resetMjpegWatchdog(MJPEG_FIRST_FRAME_MS);
 
           let firstFrameSeen = false;
           const chunks: Buffer[] = [];

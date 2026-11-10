@@ -343,7 +343,12 @@ describe("Camera", () => {
       const camera = createCamera(config);
       camera.start();
 
+      // A slow RTSP connect gets a grace period before the first frame.
       jest.advanceTimersByTime(10_000);
+      expect(proc.kill).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(19_000);
+      expect(proc.kill).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(1_000);
       expect(proc.kill).toHaveBeenCalledTimes(1);
 
       camera.stop();
