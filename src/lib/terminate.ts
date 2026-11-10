@@ -8,5 +8,5 @@ export function terminate(child: ChildProcess): void {
   child.kill();
   const killTimer = setTimeout(() => child.kill("SIGKILL"), SIGKILL_DELAY_MS);
   killTimer.unref();
-  child.once("close", () => clearTimeout(killTimer));
+  child.once("exit", () => clearTimeout(killTimer));
 }
