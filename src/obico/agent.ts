@@ -12,6 +12,11 @@ import {
   buildStatusMessage,
 } from "./types";
 import { PrinterStatus, JobInfo } from "../prusalink/types";
+import {
+  PrintStartStore,
+  createFilePrintStartStore,
+  printStartStorePath,
+} from "./print-start-store";
 import { createCircuitBreaker } from "../lib/circuit-breaker";
 import { calculateDelay } from "../lib/retry";
 import { resilienceConfig } from "../lib/env-config";
@@ -21,7 +26,10 @@ import { HealthState, ErrorSeverity } from "../lib/health-monitor";
 export function createObicoAgent(
   config: ObicoAgentConfig,
   http: HttpFetcher,
-  dispatcher: PrusaLinkCommandDispatcher
+  dispatcher: PrusaLinkCommandDispatcher,
+  printStartStore: PrintStartStore = createFilePrintStartStore(
+    printStartStorePath()
+  )
 ): ObicoAgent {
   const cb = createCircuitBreaker(resilienceConfig.circuitBreaker);
   circuitBreakerRegistry.set("obico_ws", cb);
@@ -32,6 +40,18 @@ export function createObicoAgent(
   let activePrintFileId: number | null = null;
   let lastPrintState: string | null = null;
   let cachedJob: JobInfo | null = null;
+  let printStart = printStartStore.load();
+
+  // Start time of the given PrusaLink job: the stored one if the job id matches,
+  // otherwise now (a new print), persisted so a restarted bridge sends the same value.
+  function printStartTsFor(job: JobInfo | null): number | null {
+    if (job === null) return null;
+    if (printStart?.jobId !== job.id) {
+      printStart = { jobId: job.id, ts: Math.floor(Date.now() / 1000) };
+      printStartStore.save(printStart);
+    }
+    return printStart.ts;
+  }
 
   // Janus signaling — Obico sends {"janus": "<json>"} on the agent WS.
   // We forward to local Janus and send responses back on the same WS.
@@ -506,8 +526,15 @@ export function createObicoAgent(
         cachedJob = job;
       }
 
+      const isActiveState =
+        status.state === "PRINTING" ||
+        status.state === "PAUSED" ||
+        status.state === "ATTENTION" ||
+        status.state === "FINISHING";
       const wasActiveState =
-        lastPrintState === "PRINTING" || lastPrintState === "PAUSED";
+        lastPrintState === "PRINTING" ||
+        lastPrintState === "PAUSED" ||
+        lastPrintState === "ATTENTION";
       const isFinishingOrFinished =
         status.state === "FINISHING" || status.state === "FINISHED";
       const wasFinishingState =
@@ -538,7 +565,8 @@ export function createObicoAgent(
         status,
         effectiveJob,
         config.streamUrl,
-        activePrintFileId
+        activePrintFileId,
+        isActiveState ? printStartTsFor(effectiveJob) : null
       );
       const json = JSON.stringify(msg);
 
