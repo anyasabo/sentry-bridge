@@ -8,9 +8,12 @@ jest.mock("fs", () => ({
   readdirSync: () => [],
 }));
 jest.mock("ws");
+let mockJanusMode = "bundled";
 jest.mock("../lib/env-config", () => ({
   ...jest.requireActual("../lib/env-config"),
-  janusModeEnv: "bundled",
+  get janusModeEnv() {
+    return mockJanusMode;
+  },
 }));
 
 import * as cp from "child_process";
@@ -55,6 +58,7 @@ describe("Janus manager, bundled mode", () => {
     jest.clearAllMocks();
     jest.useFakeTimers({ doNotFake: ["setImmediate"] });
     janusAnswers = true;
+    mockJanusMode = "bundled";
     MockWebSocket.mockImplementation(fakeSocket);
     jest.spyOn(console, "log").mockImplementation(() => {});
     jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -105,6 +109,61 @@ describe("Janus manager, bundled mode", () => {
     janusAnswers = true;
     await tick(30_000);
     expect(proc.kill).not.toHaveBeenCalled();
+    manager.stop();
+  });
+
+  it("probes once per interval after start() is called again", async () => {
+    const { manager } = await startManager();
+    const restarted = manager.start();
+    await tick(0);
+    expect(await restarted).toBe(true);
+    MockWebSocket.mockClear();
+    await tick(10_000);
+    expect(MockWebSocket).toHaveBeenCalledTimes(1);
+    manager.stop();
+  });
+
+  it("kills a Janus that never answered after start", async () => {
+    const proc = makeProcess();
+    mockSpawn.mockReturnValue(proc);
+    janusAnswers = false;
+    const manager = createJanusManager();
+    const started = manager.start();
+    await tick(11_000);
+    expect(await started).toBe(false);
+    await tick(30_000);
+    expect(proc.kill).toHaveBeenCalledTimes(1);
+    manager.stop();
+  });
+});
+
+describe("Janus manager, hosted mode", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers({ doNotFake: ["setImmediate"] });
+    janusAnswers = true;
+    mockJanusMode = "hosted";
+    MockWebSocket.mockImplementation(fakeSocket);
+    jest.spyOn(console, "log").mockImplementation(() => {});
+    jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  it("probes once per interval after start() is called again", async () => {
+    const manager = createJanusManager();
+    const first = manager.start();
+    await tick(0);
+    expect(await first).toBe(true);
+    const second = manager.start();
+    await tick(0);
+    expect(await second).toBe(true);
+    MockWebSocket.mockClear();
+    await tick(10_000);
+    expect(MockWebSocket).toHaveBeenCalledTimes(1);
     manager.stop();
   });
 });

@@ -9,6 +9,42 @@ import { HealthState, ErrorSeverity } from "../lib/health-monitor";
 
 function discard(): void {}
 
+/** Single exit point for ffmpeg output that reaches logs or error messages. */
+export function formatFfmpegLog(text: string): string {
+  return text;
+}
+
+const STDERR_TAIL_LINES = 20;
+
+interface StderrTail {
+  lines(): string[];
+  clear(): void;
+}
+
+/** Keeps the last few stderr lines of a process for diagnostics. */
+function trackStderrTail(child: ChildProcess): StderrTail {
+  let lines: string[] = [];
+  let partial = "";
+  child.stderr!.on("data", (d: Buffer | string) => {
+    const parts = (partial + String(d)).split(/\r?\n|\r/);
+    partial = parts.pop()!;
+    lines.push(...parts.filter((line) => line.trim() !== ""));
+    if (lines.length > STDERR_TAIL_LINES) {
+      lines = lines.slice(-STDERR_TAIL_LINES);
+    }
+  });
+  return {
+    lines() {
+      const all = partial.trim() !== "" ? [...lines, partial] : lines;
+      return all.slice(-STDERR_TAIL_LINES);
+    },
+    clear() {
+      lines = [];
+      partial = "";
+    },
+  };
+}
+
 export function createCamera(config: CameraConfig): CameraModule {
   let proc: ChildProcess | null = null;
   let rtpProc: ChildProcess | null = null;
@@ -20,6 +56,7 @@ export function createCamera(config: CameraConfig): CameraModule {
   let mjpegRestartAttempt = 0;
   let mjpegRestartTimer: ReturnType<typeof setTimeout> | null = null;
   let mjpegWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
+  let mjpegStderr: StderrTail | null = null;
   const MJPEG_WATCHDOG_MS = 10_000;
 
   let rtpStopped = false;
@@ -48,12 +85,24 @@ export function createCamera(config: CameraConfig): CameraModule {
     return child;
   }
 
+  // Clears the tail once logged, so a watchdog kill and the exit that follows
+  // don't print the same lines twice.
+  function logMjpegStderr(): void {
+    const lines = mjpegStderr?.lines() ?? [];
+    if (lines.length === 0) return;
+    mjpegStderr!.clear();
+    console.warn(
+      formatFfmpegLog(`[camera] MJPEG ffmpeg stderr:\n${lines.join("\n")}`)
+    );
+  }
+
   function resetMjpegWatchdog(): void {
     if (mjpegWatchdogTimer) clearTimeout(mjpegWatchdogTimer);
     mjpegWatchdogTimer = setTimeout(() => {
       if (mjpegStopped) return;
       const msg = `MJPEG watchdog: no frame for ${MJPEG_WATCHDOG_MS / 1000}s`;
       console.warn(`[camera] ${msg} — killing ffmpeg`);
+      logMjpegStderr();
       healthMonitor.setState("camera", HealthState.RECOVERING);
       healthMonitor.pushError("camera", msg, ErrorSeverity.ERROR);
       if (proc) {
@@ -69,6 +118,10 @@ export function createCamera(config: CameraConfig): CameraModule {
       () =>
         new Promise<void>((resolve, reject) => {
           proc = spawnFfmpeg([
+            "-hide_banner",
+            "-nostats",
+            "-loglevel",
+            "warning",
             "-rtsp_transport",
             "tcp",
             "-i",
@@ -81,6 +134,7 @@ export function createCamera(config: CameraConfig): CameraModule {
             "mjpeg",
             "pipe:1",
           ]);
+          mjpegStderr = trackStderrTail(proc);
 
           let firstFrameSeen = false;
           const chunks: Buffer[] = [];
@@ -120,6 +174,7 @@ export function createCamera(config: CameraConfig): CameraModule {
               if (!firstFrameSeen) resolve(); // clean shutdown before first frame — do not count as CB failure
               return;
             }
+            if (code !== 0) logMjpegStderr();
             const msg = `MJPEG stream exited (code ${code})`;
             console.log(`[camera] ${msg} — restarting`);
             healthMonitor.setState("camera", HealthState.RECOVERING);
@@ -342,6 +397,7 @@ export function createCamera(config: CameraConfig): CameraModule {
           "pipe:1",
         ]);
 
+        const stderrTail = trackStderrTail(p);
         let settled = false;
 
         const timer = setTimeout(() => {
@@ -367,7 +423,13 @@ export function createCamera(config: CameraConfig): CameraModule {
           clearTimeout(timer);
           const buf = Buffer.concat(chunks);
           if (code !== 0 && buf.length === 0) {
-            reject(new Error(`ffmpeg exited with code ${code}`));
+            const lastLine = stderrTail.lines().pop();
+            const detail = lastLine ? `: ${lastLine}` : "";
+            reject(
+              new Error(
+                formatFfmpegLog(`ffmpeg exited with code ${code}${detail}`)
+              )
+            );
             return;
           }
           resolve(buf);
