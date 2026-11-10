@@ -20,6 +20,22 @@ describe("terminate()", () => {
     expect(child.kill).toHaveBeenLastCalledWith("SIGKILL");
   });
 
+  it("leaves a process alone that has already exited", () => {
+    const child = makeChild();
+    Object.assign(child, { exitCode: 0, signalCode: null });
+    terminate(child);
+    jest.advanceTimersByTime(5_000);
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
+  it("leaves a process alone that was already killed by a signal", () => {
+    const child = makeChild();
+    Object.assign(child, { exitCode: null, signalCode: "SIGKILL" });
+    terminate(child);
+    jest.advanceTimersByTime(5_000);
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
   // `close` waits for every stdio stream; a grandchild holding one open would
   // keep it from firing although the process itself is gone.
   it("does not SIGKILL once the process has exited, even without close", () => {
