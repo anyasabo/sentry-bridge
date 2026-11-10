@@ -325,6 +325,40 @@ describe("Camera", () => {
       expect(mockSpawn).toHaveBeenCalledTimes(2);
     });
 
+    it("terminates an ffmpeg that hangs before its first frame", () => {
+      jest.useFakeTimers();
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+
+      jest.advanceTimersByTime(10_000);
+      expect(proc.kill).toHaveBeenCalledTimes(1);
+
+      camera.stop();
+      warn.mockRestore();
+    });
+
+    it("ignores frames from a replaced ffmpeg", () => {
+      const oldProc = makeMockProcess({});
+      const newProc = makeMockProcess({});
+      mockSpawn.mockReturnValueOnce(oldProc).mockReturnValueOnce(newProc);
+      const onFrame = jest.fn();
+      const camera = createCamera(config);
+      camera.onFrame(onFrame);
+      camera.start();
+      camera.stop();
+      camera.start();
+
+      oldProc.stdout!.emit("data", fakeJpeg);
+      expect(onFrame).not.toHaveBeenCalled();
+
+      newProc.stdout!.emit("data", fakeJpeg);
+      expect(onFrame).toHaveBeenCalledTimes(1);
+      camera.stop();
+    });
+
     it("does not crash if stop() is called before start()", () => {
       const camera = createCamera(config);
       expect(() => camera.stop()).not.toThrow();

@@ -135,11 +135,14 @@ export function createCamera(config: CameraConfig): CameraModule {
             "pipe:1",
           ]);
           mjpegStderr = trackStderrTail(proc);
+          // Armed before the first frame too: ffmpeg can hang while connecting.
+          resetMjpegWatchdog();
 
           let firstFrameSeen = false;
           const chunks: Buffer[] = [];
 
           proc.stdout!.on("data", (chunk: Buffer) => {
+            if (gen !== mjpegGeneration) return; // output of a replaced process
             chunks.push(chunk);
             const buf = Buffer.concat(chunks);
             const end = buf.lastIndexOf(Buffer.from([0xff, 0xd9]));
