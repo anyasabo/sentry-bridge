@@ -123,6 +123,35 @@ describe("Janus manager, bundled mode", () => {
     manager.stop();
   });
 
+  it("keeps its own Janus in bundled mode when auto start() runs again", async () => {
+    mockJanusMode = "auto";
+    const proc = makeProcess();
+    mockSpawn.mockReturnValue(proc);
+    // The quick probe for a hosted Janus fails, so the binary gets spawned.
+    janusAnswers = false;
+    const manager = createJanusManager();
+    const started = manager.start();
+    await tick(0);
+    await tick(0);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    janusAnswers = true;
+    await tick(1_000);
+    expect(await started).toBe(true);
+    expect(manager.mode).toBe("bundled");
+
+    // Now our own Janus answers the quick probe; it must not look hosted.
+    const restarted = manager.start();
+    await tick(0);
+    expect(await restarted).toBe(true);
+    expect(manager.mode).toBe("bundled");
+
+    // The bundled watchdog, not the hosted one, still guards the process.
+    janusAnswers = false;
+    await tick(30_000);
+    expect(proc.kill).toHaveBeenCalledTimes(1);
+    manager.stop();
+  });
+
   it("kills a Janus that never answered after start", async () => {
     const proc = makeProcess();
     mockSpawn.mockReturnValue(proc);

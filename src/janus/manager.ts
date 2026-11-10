@@ -349,8 +349,9 @@ export function createJanusManager(): JanusManager {
         return ready;
       }
 
-      // auto: 1. quick probe → hosted
-      const quickProbe = await probeWs(2000);
+      // auto: 1. quick probe → hosted. Skipped once bundled: our own Janus
+      // would answer it and be mistaken for a hosted one.
+      const quickProbe = janusMode !== "bundled" && (await probeWs(2000));
       if (quickProbe) {
         janusMode = "hosted";
         console.log("[janus] Hosted Janus detected on", wsUrl);
