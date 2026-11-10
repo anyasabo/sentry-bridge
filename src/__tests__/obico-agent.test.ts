@@ -5,6 +5,7 @@ import { createObicoAgent } from "../obico/agent";
 import { ObicoAgentConfig, PrusaLinkCommandDispatcher } from "../obico/types";
 import { PrinterStatus, JobInfo } from "../prusalink/types";
 import { buildStatusMessage } from "../obico/types";
+import { PrintStart, PrintStartStore } from "../obico/print-start-store";
 import { Readable } from "node:stream";
 
 // Mock node:fs so download tests don't touch the real filesystem
@@ -99,14 +100,30 @@ describe("buildStatusMessage()", () => {
   });
 
   it("reflects PRINTING state with job info", () => {
-    const msg = buildStatusMessage(printingStatus, activeJob);
+    const msg = buildStatusMessage(
+      printingStatus,
+      activeJob,
+      undefined,
+      null,
+      1700000000
+    );
     expect(msg.status.state.text).toBe("Printing");
     expect(msg.status.state.flags.printing).toBe(true);
-    expect(msg.current_print_ts).not.toBeNull();
+    expect(msg.current_print_ts).toBe(1700000000);
     expect(msg.status.job.file.name).toBe("benchy_0.2mm.gcode");
     expect(msg.status.progress.completion).toBe(42.5);
     expect(msg.status.temperatures.tool0.actual).toBe(26.0);
     expect(msg.status.temperatures.bed.actual).toBe(25.0);
+  });
+
+  it("sends current_print_ts null while printing with no known print start", () => {
+    const msg = buildStatusMessage(printingStatus, null);
+    expect(msg.current_print_ts).toBeNull();
+  });
+
+  it("sends current_print_ts null in BUSY, which can occur during a print", () => {
+    const msg = buildStatusMessage({ ...idleStatus, state: "BUSY" }, null);
+    expect(msg.current_print_ts).toBeNull();
   });
 
   it("reflects PAUSED state", () => {
@@ -119,13 +136,9 @@ describe("buildStatusMessage()", () => {
   });
 
   it("reflects FINISHED state — finishing flag true, current_print_ts=-1 (Print Done signal)", () => {
-    const printTs = Math.floor(Date.now() / 1000) - 3600;
     const msg = buildStatusMessage(
       { ...idleStatus, state: "FINISHED" },
-      activeJob,
-      undefined,
-      null,
-      printTs
+      activeJob
     );
     expect(msg.status.state.text).toBe("Operational");
     expect(msg.status.state.flags.finishing).toBe(true);
@@ -161,18 +174,17 @@ describe("buildStatusMessage()", () => {
   });
 
   it("FINISHING state sets finishing flag and preserves current_print_ts", () => {
-    const printTs = Math.floor(Date.now() / 1000) - 600;
     const msg = buildStatusMessage(
       { ...idleStatus, state: "FINISHING" },
       activeJob,
       undefined,
       null,
-      printTs
+      1700000000
     );
     expect(msg.status.state.text).toBe("Finishing");
     expect(msg.status.state.flags.finishing).toBe(true);
     expect(msg.status.state.flags.printing).toBe(false);
-    expect(msg.current_print_ts).toBe(printTs);
+    expect(msg.current_print_ts).toBe(1700000000);
   });
 
   it("maps job.currentLayer/totalLayers into progress", () => {
@@ -202,19 +214,12 @@ describe("buildStatusMessage()", () => {
     expect(msgFallback.status.progress.currentZ).toBe(2.0);
   });
 
-  it("FINISHING with null job still produces valid message with finishing flag and preserved ts", () => {
-    const printTs = Math.floor(Date.now() / 1000) - 300;
-    const msg = buildStatusMessage(
-      { ...idleStatus, state: "FINISHING" },
-      null,
-      undefined,
-      null,
-      printTs
-    );
+  it("FINISHING with null job still produces valid message with finishing flag and unknown ts", () => {
+    const msg = buildStatusMessage({ ...idleStatus, state: "FINISHING" }, null);
     expect(msg.status.state.flags.finishing).toBe(true);
     expect(msg.status.progress.currentLayer).toBeNull();
     expect(msg.status.progress.totalLayers).toBeNull();
-    expect(msg.current_print_ts).toBe(printTs);
+    expect(msg.current_print_ts).toBeNull();
   });
 });
 
@@ -1600,7 +1605,7 @@ describe("http.tunnelv2 handler", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// FINISHING state: Job-Context-Caching and printStartTs persistence (Gap 1 fix)
+// FINISHING state: Job-Context-Caching and print id persistence (Gap 1 fix)
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("FINISHING state handling", () => {
@@ -1618,7 +1623,7 @@ describe("FINISHING state handling", () => {
     wss.close(done);
   });
 
-  it("preserves printStartTs and job context across PRINTING → FINISHING → IDLE", (done) => {
+  it("preserves the print id and job context across PRINTING → FINISHING → IDLE", (done) => {
     const agent = createObicoAgent(
       { serverUrl: `http://localhost:${port}`, apiKey: "key" },
       mockHttp,
@@ -1653,15 +1658,15 @@ describe("FINISHING state handling", () => {
     });
 
     setTimeout(() => {
-      // Step 1: PRINTING with job — sets printStartTs and caches job
+      // Step 1: PRINTING with job — caches job
       agent.sendStatus(printingStatus, printingJob);
 
       setTimeout(() => {
-        // Step 2: FINISHING with job=null — must use cached job + preserve printStartTs
+        // Step 2: FINISHING with job=null — must use cached job and its id
         agent.sendStatus(finishingStatus, null);
 
         setTimeout(() => {
-          // Step 3: IDLE — resets printStartTs and cachedJob
+          // Step 3: IDLE — resets cachedJob
           agent.sendStatus(idleStatus, null);
 
           setTimeout(() => {
@@ -1683,6 +1688,9 @@ describe("FINISHING state handling", () => {
             const finishingMsg = statusMsgs[1];
             expect(finishingMsg.status.state.flags.finishing).toBe(true);
             expect(finishingMsg.current_print_ts).toBeGreaterThan(0);
+            expect(finishingMsg.current_print_ts).toBe(
+              statusMsgs[0].current_print_ts
+            );
             expect(finishingMsg.status.job.file.name).toBe("test_0.2mm.gcode");
 
             // Third message (IDLE) must have current_print_ts === -1
@@ -1732,7 +1740,7 @@ describe("FINISHING state handling", () => {
     });
 
     setTimeout(() => {
-      // Step 1: PRINTING with job — sets printStartTs and caches job
+      // Step 1: PRINTING with job — caches job
       agent.sendStatus(printingStatus, printingJob);
 
       setTimeout(() => {
@@ -1864,5 +1872,253 @@ describe("FINISHING state handling", () => {
         }, 50);
       }, 50);
     }, 50);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// current_print_ts: a start timestamp per PrusaLink job id, kept across restarts
+// ──────────────────────────────────────────────────────────────────────────────
+
+function memoryStore(initial: PrintStart | null = null): PrintStartStore & {
+  saved: PrintStart[];
+} {
+  let current = initial;
+  const saved: PrintStart[] = [];
+  return {
+    saved,
+    load: () => current,
+    save: (record) => {
+      current = record;
+      saved.push(record);
+    },
+  };
+}
+
+describe("current_print_ts", () => {
+  let wss: WebSocketServer;
+  let port: number;
+  const sockets: WebSocket[] = [];
+
+  beforeEach((done) => {
+    port = getPort();
+    sockets.length = 0;
+    wss = new WebSocketServer({ port });
+    wss.on("connection", (ws) => sockets.push(ws));
+    wss.on("listening", done);
+  });
+
+  afterEach((done) => {
+    jest.restoreAllMocks();
+    wss.close(done);
+  });
+
+  type Received = { current_print_ts: number | null; file: string | null };
+
+  // One agent (one run of the bridge): connect, send each status, and return
+  // every status message Obico received.
+  async function run(
+    store: PrintStartStore,
+    statuses: Array<[PrinterStatus, JobInfo | null]>
+  ): Promise<Received[]> {
+    const agent = createObicoAgent(
+      { serverUrl: `http://localhost:${port}`, apiKey: "key" },
+      mockHttp,
+      mockDispatcher,
+      store
+    );
+    const before = sockets.length;
+    agent.connect();
+    while (sockets.length === before)
+      await new Promise((r) => setTimeout(r, 10));
+    const received: Received[] = [];
+    sockets[before].on("message", (d) => {
+      const msg = JSON.parse(d.toString());
+      if (msg.status)
+        received.push({
+          current_print_ts: msg.current_print_ts,
+          file: msg.status.job.file.name,
+        });
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    for (const [status, job] of statuses) agent.sendStatus(status, job);
+    await new Promise((r) => setTimeout(r, 50));
+    agent.disconnect();
+    return received;
+  }
+
+  async function tsOf(
+    store: PrintStartStore,
+    statuses: Array<[PrinterStatus, JobInfo | null]>
+  ): Promise<Array<number | null>> {
+    return (await run(store, statuses)).map((m) => m.current_print_ts);
+  }
+
+  function mockNow(unixSeconds: number): void {
+    jest.spyOn(Date, "now").mockReturnValue(unixSeconds * 1000);
+  }
+
+  const attentionStatus: PrinterStatus = { ...idleStatus, state: "ATTENTION" };
+  const pausedStatus: PrinterStatus = { ...idleStatus, state: "PAUSED" };
+  const busyStatus: PrinterStatus = { ...idleStatus, state: "BUSY" };
+  const finishedStatus: PrinterStatus = { ...idleStatus, state: "FINISHED" };
+  const job41: JobInfo = { ...activeJob, id: 41 };
+  const job42: JobInfo = { ...activeJob, id: 42 };
+
+  it("sends the start time of the job, the same before and after a restart", async () => {
+    const store = memoryStore();
+    mockNow(1_700_000_000);
+    expect(await tsOf(store, [[printingStatus, job41]])).toEqual([
+      1_700_000_000,
+    ]);
+    expect(store.saved).toEqual([{ jobId: 41, ts: 1_700_000_000 }]);
+
+    mockNow(1_700_003_600);
+    expect(await tsOf(store, [[printingStatus, job41]])).toEqual([
+      1_700_000_000,
+    ]);
+    expect(store.saved).toHaveLength(1);
+  });
+
+  it("gives a new job id a new start time", async () => {
+    const store = memoryStore({ jobId: 41, ts: 1_700_000_000 });
+    mockNow(1_700_007_200);
+    expect(await tsOf(store, [[printingStatus, job42]])).toEqual([
+      1_700_007_200,
+    ]);
+    expect(store.saved).toEqual([{ jobId: 42, ts: 1_700_007_200 }]);
+  });
+
+  it("sends null, not -1 or a new value, until a restarted bridge knows the job", async () => {
+    const store = memoryStore({ jobId: 41, ts: 1_700_000_000 });
+    expect(
+      await tsOf(store, [
+        [printingStatus, null],
+        [printingStatus, job41],
+      ])
+    ).toEqual([null, 1_700_000_000]);
+  });
+
+  it("keeps the start time through ATTENTION and PAUSED", async () => {
+    const store = memoryStore();
+    mockNow(1_700_000_000);
+    expect(
+      await tsOf(store, [
+        [printingStatus, job41],
+        [attentionStatus, job41],
+        [pausedStatus, job41],
+        [printingStatus, job41],
+      ])
+    ).toEqual([1_700_000_000, 1_700_000_000, 1_700_000_000, 1_700_000_000]);
+  });
+
+  it("does not end the print in BUSY (e.g. crash recovery)", async () => {
+    const store = memoryStore();
+    mockNow(1_700_000_000);
+    expect(
+      await tsOf(store, [
+        [printingStatus, job41],
+        [busyStatus, null],
+        [printingStatus, job41],
+      ])
+    ).toEqual([1_700_000_000, null, 1_700_000_000]);
+  });
+
+  it("ends the print with -1 and gives the next print its own start time", async () => {
+    const store = memoryStore();
+    mockNow(1_700_000_000);
+    const first = await tsOf(store, [
+      [printingStatus, job41],
+      [finishedStatus, null],
+    ]);
+    mockNow(1_700_000_600);
+    const second = await tsOf(store, [
+      [printingStatus, null],
+      [printingStatus, job42],
+    ]);
+    expect([...first, ...second]).toEqual([
+      1_700_000_000,
+      -1,
+      null,
+      1_700_000_600,
+    ]);
+  });
+
+  it("gives the same job id a new start time once its print was ended with -1", async () => {
+    const store = memoryStore();
+    const errorStatus: PrinterStatus = { ...idleStatus, state: "ERROR" };
+    mockNow(1_700_000_000);
+    const first = await tsOf(store, [
+      [printingStatus, job41],
+      [errorStatus, null],
+    ]);
+    expect(store.saved[store.saved.length - 1]).toEqual({
+      jobId: 41,
+      ts: 1_700_000_000,
+      ended: true,
+    });
+    // After a restart, the same job continues: Obico refuses the ended ts.
+    mockNow(1_700_000_120);
+    const second = await tsOf(store, [[printingStatus, job41]]);
+    expect([...first, ...second]).toEqual([1_700_000_000, -1, 1_700_000_120]);
+    expect(store.saved[store.saved.length - 1]).toEqual({
+      jobId: 41,
+      ts: 1_700_000_120,
+    });
+  });
+
+  it("sends null for ATTENTION outside a print whose job is already finished", async () => {
+    const store = memoryStore();
+    const finishedJob41: JobInfo = { ...job41, state: "FINISHED" };
+    mockNow(1_700_000_000);
+    const first = await tsOf(store, [
+      [printingStatus, job41],
+      [finishedStatus, null],
+    ]);
+    mockNow(1_700_000_300);
+    // Panel dialog after the print: /api/v1/job still reports the finished job.
+    const second = await tsOf(store, [[attentionStatus, finishedJob41]]);
+    expect([...first, ...second]).toEqual([1_700_000_000, -1, null]);
+    expect(store.saved).toHaveLength(2);
+  });
+
+  it("marks a stored print as ended when the first tick after a restart is IDLE", async () => {
+    const store = memoryStore({ jobId: 41, ts: 1_700_000_000 });
+    expect(await tsOf(store, [[idleStatus, null]])).toEqual([-1]);
+    expect(store.saved).toEqual([
+      { jobId: 41, ts: 1_700_000_000, ended: true },
+    ]);
+  });
+
+  it("marks the print as ended only once across repeated -1 ticks", async () => {
+    const store = memoryStore();
+    mockNow(1_700_000_000);
+    await tsOf(store, [
+      [printingStatus, job41],
+      [finishedStatus, null],
+      [finishedStatus, null],
+      [idleStatus, null],
+    ]);
+    expect(store.saved).toEqual([
+      { jobId: 41, ts: 1_700_000_000 },
+      { jobId: 41, ts: 1_700_000_000, ended: true },
+    ]);
+  });
+
+  it("resets the cached job on PRINTING → ATTENTION → IDLE", async () => {
+    const store = memoryStore();
+    const msgs = await run(store, [
+      [printingStatus, job41],
+      [attentionStatus, null],
+      [idleStatus, null],
+      // A FINISHED tick without a fresh job only shows a file name if the
+      // cached job survived the IDLE tick.
+      [finishedStatus, null],
+    ]);
+    expect(msgs.map((m) => m.file)).toEqual([
+      "benchy_0.2mm.gcode",
+      null,
+      null,
+      null,
+    ]);
   });
 });
