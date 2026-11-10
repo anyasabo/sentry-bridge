@@ -2066,6 +2066,29 @@ describe("current_print_ts", () => {
     });
   });
 
+  it("sends null for ATTENTION outside a print whose job is already finished", async () => {
+    const store = memoryStore();
+    const finishedJob41: JobInfo = { ...job41, state: "FINISHED" };
+    mockNow(1_700_000_000);
+    const first = await tsOf(store, [
+      [printingStatus, job41],
+      [finishedStatus, null],
+    ]);
+    mockNow(1_700_000_300);
+    // Panel dialog after the print: /api/v1/job still reports the finished job.
+    const second = await tsOf(store, [[attentionStatus, finishedJob41]]);
+    expect([...first, ...second]).toEqual([1_700_000_000, -1, null]);
+    expect(store.saved).toHaveLength(2);
+  });
+
+  it("marks a stored print as ended when the first tick after a restart is IDLE", async () => {
+    const store = memoryStore({ jobId: 41, ts: 1_700_000_000 });
+    expect(await tsOf(store, [[idleStatus, null]])).toEqual([-1]);
+    expect(store.saved).toEqual([
+      { jobId: 41, ts: 1_700_000_000, ended: true },
+    ]);
+  });
+
   it("marks the print as ended only once across repeated -1 ticks", async () => {
     const store = memoryStore();
     mockNow(1_700_000_000);

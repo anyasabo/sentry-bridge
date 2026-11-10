@@ -40,14 +40,16 @@ export function createObicoAgent(
   let printStart = printStartStore.load();
 
   // Start time of the given PrusaLink job: the stored one if the job id matches and
-  // its print was not ended yet, otherwise now (a new print in Obico). Persisted so a
-  // restarted bridge sends the same value.
+  // its print was not ended yet. Otherwise now (a new print in Obico), but only for a
+  // running job — an ATTENTION dialog after a print still reports the finished job,
+  // which must not start a phantom print. Persisted so a restarted bridge sends the
+  // same value.
   function printStartTsFor(job: JobInfo | null): number | null {
     if (job === null) return null;
-    if (printStart?.jobId !== job.id || printStart.ended) {
-      printStart = { jobId: job.id, ts: Math.floor(Date.now() / 1000) };
-      printStartStore.save(printStart);
-    }
+    if (printStart?.jobId === job.id && !printStart.ended) return printStart.ts;
+    if (job.state !== "PRINTING" && job.state !== "PAUSED") return null;
+    printStart = { jobId: job.id, ts: Math.floor(Date.now() / 1000) };
+    printStartStore.save(printStart);
     return printStart.ts;
   }
 
