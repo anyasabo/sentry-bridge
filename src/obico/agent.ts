@@ -12,6 +12,10 @@ import {
   buildStatusMessage,
 } from "./types";
 import { PrinterStatus, JobInfo } from "../prusalink/types";
+import {
+  PrintStartStore,
+  createMemoryPrintStartStore,
+} from "./print-start-store";
 import { createCircuitBreaker } from "../lib/circuit-breaker";
 import { calculateDelay } from "../lib/retry";
 import { resilienceConfig } from "../lib/env-config";
@@ -21,7 +25,8 @@ import { HealthState, ErrorSeverity } from "../lib/health-monitor";
 export function createObicoAgent(
   config: ObicoAgentConfig,
   http: HttpFetcher,
-  dispatcher: PrusaLinkCommandDispatcher
+  dispatcher: PrusaLinkCommandDispatcher,
+  printStartStore: PrintStartStore = createMemoryPrintStartStore()
 ): ObicoAgent {
   const cb = createCircuitBreaker(resilienceConfig.circuitBreaker);
   circuitBreakerRegistry.set("obico_ws", cb);
@@ -30,9 +35,23 @@ export function createObicoAgent(
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let disconnecting = false;
   let activePrintFileId: number | null = null;
-  let printStartTs: number | null = null;
   let lastPrintState: string | null = null;
   let cachedJob: JobInfo | null = null;
+  let printStart = printStartStore.load();
+
+  // Start time of the given PrusaLink job: the stored one if the job id matches and
+  // its print was not ended yet. Otherwise now (a new print in Obico), but only for a
+  // running job — an ATTENTION dialog after a print still reports the finished job,
+  // which must not start a phantom print. Persisted so a restarted bridge sends the
+  // same value.
+  function printStartTsFor(job: JobInfo | null): number | null {
+    if (job === null) return null;
+    if (printStart?.jobId === job.id && !printStart.ended) return printStart.ts;
+    if (job.state !== "PRINTING" && job.state !== "PAUSED") return null;
+    printStart = { jobId: job.id, ts: Math.floor(Date.now() / 1000) };
+    printStartStore.save(printStart);
+    return printStart.ts;
+  }
 
   // Janus signaling — Obico sends {"janus": "<json>"} on the agent WS.
   // We forward to local Janus and send responses back on the same WS.
@@ -508,30 +527,28 @@ export function createObicoAgent(
       }
 
       const isActiveState =
-        status.state === "PRINTING" || status.state === "PAUSED";
+        status.state === "PRINTING" ||
+        status.state === "PAUSED" ||
+        status.state === "ATTENTION" ||
+        status.state === "FINISHING";
       const wasActiveState =
-        lastPrintState === "PRINTING" || lastPrintState === "PAUSED";
+        lastPrintState === "PRINTING" ||
+        lastPrintState === "PAUSED" ||
+        lastPrintState === "ATTENTION";
       const isFinishingOrFinished =
         status.state === "FINISHING" || status.state === "FINISHED";
       const wasFinishingState =
         lastPrintState === "FINISHED" || lastPrintState === "FINISHING";
 
-      // Track print start timestamp — set once when print begins, stable for entire print
-      let shouldResetAfterSend = false;
-      if (isActiveState && !wasActiveState) {
-        printStartTs = Math.floor(Date.now() / 1000);
-      } else if (
+      // Reset AFTER sending — only when transitioning to true IDLE.
+      // FINISHED is a long-lived state on Prusa Core One (printer waits for
+      // user to acknowledge at panel before moving to IDLE). Every FINISHED
+      // poll must keep the cached job context, otherwise file.name goes null
+      // on subsequent ticks and Obico's UI flickers between "has file" and
+      // "no file" → inconsistent display.
+      const shouldResetAfterSend =
         (status.state === "IDLE" || status.state === "STOPPED") &&
-        (wasActiveState || wasFinishingState)
-      ) {
-        // Reset AFTER sending — only when transitioning to true IDLE.
-        // FINISHED is a long-lived state on Prusa Core One (printer waits for
-        // user to acknowledge at panel before moving to IDLE). Every FINISHED
-        // poll must keep the cached job context, otherwise file.name goes null
-        // on subsequent ticks and Obico's UI flickers between "has file" and
-        // "no file" → inconsistent display.
-        shouldResetAfterSend = true;
-      }
+        (wasActiveState || wasFinishingState);
 
       // During FINISHING or FINISHED, use cached job if no fresh job available
       const effectiveJob = job ?? (isFinishingOrFinished ? cachedJob : null);
@@ -549,7 +566,7 @@ export function createObicoAgent(
         effectiveJob,
         config.streamUrl,
         activePrintFileId,
-        printStartTs
+        isActiveState ? printStartTsFor(effectiveJob) : null
       );
       const json = JSON.stringify(msg);
 
@@ -569,11 +586,17 @@ export function createObicoAgent(
       );
       ws.send(json);
 
+      // -1 ends the print in Obico, which then refuses its ts ("re-surrected").
+      // Remember that, so the same job id gets a new ts if it shows up active again.
+      if (msg.current_print_ts === -1 && printStart && !printStart.ended) {
+        printStart = { ...printStart, ended: true };
+        printStartStore.save(printStart);
+      }
+
       lastPrintState = status.state;
 
       // Reset print context AFTER sending — the Done tick needs full job context
       if (shouldResetAfterSend) {
-        printStartTs = null;
         cachedJob = null;
       }
     },

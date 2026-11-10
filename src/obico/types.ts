@@ -143,8 +143,20 @@ export function buildStatusMessage(
     : null;
 
   return {
+    // Obico stores current_print_ts as Print.ext_id and starts a new print when it changes.
+    // printStartTs is the time the bridge first saw PrusaLink's job id. The agent persists
+    // the job id → start time mapping, so the value stays the same for one print, also
+    // across a restart of the bridge. A timestamp (not the job id itself) stays unique
+    // when the printer's 16-bit job counter wraps or is reset, and consecutive prints
+    // differ by far more than Obico's ±20 skew window.
+    // null means "unknown": Obico keeps its current print. -1 ends the current print.
+    // BUSY can occur during a print (e.g. crash recovery), so it must not end the print.
     current_print_ts:
-      isPrinting || isPaused || isFinishing ? (printStartTs ?? now) : -1,
+      isPrinting || isPaused || isFinishing
+        ? (printStartTs ?? null)
+        : status.state === "BUSY"
+          ? null
+          : -1,
     ...(webcamEntry ? { settings: { webcams: [webcamEntry] } } : {}),
     status: {
       _ts: now,
