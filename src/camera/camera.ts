@@ -7,11 +7,18 @@ import { resilienceConfig } from "../lib/env-config";
 import { healthMonitor, circuitBreakerRegistry } from "../lib/health";
 import { HealthState, ErrorSeverity } from "../lib/health-monitor";
 
+// ffmpeg prints its input URL, password included. The greedy match runs to
+// the last "@" before the host, as ffmpeg does, so an "@" in the password is
+// also hidden.
+function redactRtspCredentials(text: string): string {
+  return text.replace(/(rtsps?:\/\/)[^\s/]*@/gi, "$1***@");
+}
+
 function discard(): void {}
 
 /** Single exit point for ffmpeg output that reaches logs or error messages. */
 export function formatFfmpegLog(text: string): string {
-  return text;
+  return redactRtspCredentials(text);
 }
 
 const STDERR_TAIL_LINES = 20;
@@ -248,7 +255,7 @@ export function createCamera(config: CameraConfig): CameraModule {
     rtpProc.stdout!.on("data", discard);
     rtpProc.stderr!.on("data", (d: Buffer) => {
       if (gen !== rtpGeneration) return;
-      process.stderr.write(`[camera/rtp] ${d}`);
+      process.stderr.write(`[camera/rtp] ${formatFfmpegLog(String(d))}`);
       resetRtpWatchdog(gen);
     });
     rtpProc.on("close", (code) => {
@@ -385,7 +392,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         const p = spawnFfmpeg([
           "-rtsp_transport",
           "tcp",
-          "-stimeout",
+          "-timeout",
           "8000000", // 8s RTSP-Socket-Timeout (Mikrosekunden) — innerer Wächter
           "-i",
           config.rtspUrl,
