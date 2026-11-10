@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from "child_process";
 import { CameraConfig, CameraModule } from "./types";
 import { createCircuitBreaker } from "../lib/circuit-breaker";
 import { calculateDelay } from "../lib/retry";
+import { terminate } from "../lib/terminate";
 import { resilienceConfig } from "../lib/env-config";
 import { healthMonitor, circuitBreakerRegistry } from "../lib/health";
 import { HealthState, ErrorSeverity } from "../lib/health-monitor";
@@ -13,6 +14,44 @@ function redactRtspCredentials(text: string): string {
   return text.replace(/(rtsps?:\/\/)[^\s/]*@/gi, "$1***@");
 }
 
+function discard(): void {}
+
+/** Single exit point for ffmpeg output that reaches logs or error messages. */
+export function formatFfmpegLog(text: string): string {
+  return redactRtspCredentials(text);
+}
+
+const STDERR_TAIL_LINES = 20;
+
+interface StderrTail {
+  lines(): string[];
+  clear(): void;
+}
+
+/** Keeps the last few stderr lines of a process for diagnostics. */
+function trackStderrTail(child: ChildProcess): StderrTail {
+  let lines: string[] = [];
+  let partial = "";
+  child.stderr!.on("data", (d: Buffer | string) => {
+    const parts = (partial + String(d)).split(/\r?\n|\r/);
+    partial = parts.pop()!;
+    lines.push(...parts.filter((line) => line.trim() !== ""));
+    if (lines.length > STDERR_TAIL_LINES) {
+      lines = lines.slice(-STDERR_TAIL_LINES);
+    }
+  });
+  return {
+    lines() {
+      const all = partial.trim() !== "" ? [...lines, partial] : lines;
+      return all.slice(-STDERR_TAIL_LINES);
+    },
+    clear() {
+      lines = [];
+      partial = "";
+    },
+  };
+}
+
 export function createCamera(config: CameraConfig): CameraModule {
   let proc: ChildProcess | null = null;
   let rtpProc: ChildProcess | null = null;
@@ -20,10 +59,14 @@ export function createCamera(config: CameraConfig): CameraModule {
   const subscribers = new Map<symbol, (frame: Buffer) => void>();
 
   let mjpegStopped = false;
+  let mjpegGeneration = 0;
   let mjpegRestartAttempt = 0;
   let mjpegRestartTimer: ReturnType<typeof setTimeout> | null = null;
   let mjpegWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
+  let mjpegStderr: StderrTail | null = null;
   const MJPEG_WATCHDOG_MS = 10_000;
+  // RTSP connect plus first decoded frame can take well over the frame gap.
+  const MJPEG_FIRST_FRAME_MS = 30_000;
 
   let rtpStopped = false;
   let rtpRestartAttempt = 0;
@@ -42,29 +85,52 @@ export function createCamera(config: CameraConfig): CameraModule {
     for (const cb of subscribers.values()) cb(frame);
   }
 
+  // Every pipe must be read: once one is full, ffmpeg blocks on its next write
+  // to it. Blocked on stderr, ffmpeg stops producing output at its next log
+  // message, which can take hours to arrive.
   function spawnFfmpeg(args: string[]): ChildProcess {
-    return spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+    child.stderr!.on("data", discard);
+    return child;
   }
 
-  function resetMjpegWatchdog(): void {
+  // Clears the tail once logged, so a watchdog kill and the exit that follows
+  // don't print the same lines twice.
+  function logMjpegStderr(): void {
+    const lines = mjpegStderr?.lines() ?? [];
+    if (lines.length === 0) return;
+    mjpegStderr!.clear();
+    console.warn(
+      formatFfmpegLog(`[camera] MJPEG ffmpeg stderr:\n${lines.join("\n")}`)
+    );
+  }
+
+  function resetMjpegWatchdog(timeoutMs = MJPEG_WATCHDOG_MS): void {
     if (mjpegWatchdogTimer) clearTimeout(mjpegWatchdogTimer);
     mjpegWatchdogTimer = setTimeout(() => {
       if (mjpegStopped) return;
-      console.warn(
-        "[camera] MJPEG watchdog: no frame for 30s — killing ffmpeg"
-      );
+      const msg = `MJPEG watchdog: no frame for ${timeoutMs / 1000}s`;
+      console.warn(`[camera] ${msg} — killing ffmpeg`);
+      logMjpegStderr();
+      healthMonitor.setState("camera", HealthState.RECOVERING);
+      healthMonitor.pushError("camera", msg, ErrorSeverity.ERROR);
       if (proc) {
-        proc.kill();
+        terminate(proc);
         proc = null;
       }
-    }, MJPEG_WATCHDOG_MS);
+    }, timeoutMs);
   }
 
   function spawnMjpeg(): void {
+    const gen = ++mjpegGeneration;
     cb.execute(
       () =>
         new Promise<void>((resolve, reject) => {
           proc = spawnFfmpeg([
+            "-hide_banner",
+            "-nostats",
+            "-loglevel",
+            "warning",
             "-rtsp_transport",
             "tcp",
             "-i",
@@ -77,11 +143,15 @@ export function createCamera(config: CameraConfig): CameraModule {
             "mjpeg",
             "pipe:1",
           ]);
+          mjpegStderr = trackStderrTail(proc);
+          // Armed before the first frame too: ffmpeg can hang while connecting.
+          resetMjpegWatchdog(MJPEG_FIRST_FRAME_MS);
 
           let firstFrameSeen = false;
           const chunks: Buffer[] = [];
 
           proc.stdout!.on("data", (chunk: Buffer) => {
+            if (gen !== mjpegGeneration) return; // output of a replaced process
             chunks.push(chunk);
             const buf = Buffer.concat(chunks);
             const end = buf.lastIndexOf(Buffer.from([0xff, 0xd9]));
@@ -102,6 +172,11 @@ export function createCamera(config: CameraConfig): CameraModule {
           });
 
           proc.on("close", (code) => {
+            if (gen !== mjpegGeneration) {
+              // stale close event from a superseded process
+              if (!firstFrameSeen) resolve();
+              return;
+            }
             if (mjpegWatchdogTimer) {
               clearTimeout(mjpegWatchdogTimer);
               mjpegWatchdogTimer = null;
@@ -111,6 +186,7 @@ export function createCamera(config: CameraConfig): CameraModule {
               if (!firstFrameSeen) resolve(); // clean shutdown before first frame — do not count as CB failure
               return;
             }
+            if (code !== 0) logMjpegStderr();
             const msg = `MJPEG stream exited (code ${code})`;
             console.log(`[camera] ${msg} — restarting`);
             healthMonitor.setState("camera", HealthState.RECOVERING);
@@ -137,9 +213,12 @@ export function createCamera(config: CameraConfig): CameraModule {
     if (rtpWatchdogTimer) clearTimeout(rtpWatchdogTimer);
     rtpWatchdogTimer = setTimeout(() => {
       if (gen !== rtpGeneration) return;
-      console.warn("[camera] RTP watchdog: no output for 30s — killing ffmpeg");
+      const msg = `RTP watchdog: no output for ${RTP_WATCHDOG_MS / 1000}s`;
+      console.warn(`[camera] ${msg} — killing ffmpeg`);
+      healthMonitor.setState("rtp_stream", HealthState.RECOVERING);
+      healthMonitor.pushError("rtp_stream", msg, ErrorSeverity.ERROR);
       if (rtpProc) {
-        rtpProc.kill();
+        terminate(rtpProc);
         rtpProc = null;
       }
     }, RTP_WATCHDOG_MS);
@@ -175,9 +254,10 @@ export function createCamera(config: CameraConfig): CameraModule {
       "rtp",
       `rtp://127.0.0.1:${port}?pkt_size=1300`,
     ]);
+    rtpProc.stdout!.on("data", discard);
     rtpProc.stderr!.on("data", (d: Buffer) => {
       if (gen !== rtpGeneration) return;
-      process.stderr.write(`[camera/rtp] ${redactRtspCredentials(String(d))}`);
+      process.stderr.write(`[camera/rtp] ${formatFfmpegLog(String(d))}`);
       resetRtpWatchdog(gen);
     });
     rtpProc.on("close", (code) => {
@@ -227,7 +307,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         mjpegWatchdogTimer = null;
       }
       if (proc) {
-        proc.kill();
+        terminate(proc);
         proc = null;
       }
       healthMonitor.setState("camera", HealthState.DOWN);
@@ -303,7 +383,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         rtpWatchdogTimer = null;
       }
       if (rtpProc) {
-        rtpProc.kill();
+        terminate(rtpProc);
         rtpProc = null;
       }
       healthMonitor.setState("rtp_stream", HealthState.DOWN);
@@ -329,12 +409,13 @@ export function createCamera(config: CameraConfig): CameraModule {
           "pipe:1",
         ]);
 
+        const stderrTail = trackStderrTail(p);
         let settled = false;
 
         const timer = setTimeout(() => {
           if (settled) return;
           settled = true;
-          p.kill();
+          terminate(p);
           reject(new Error(`testStream timed out after ${timeoutMs}ms`));
         }, timeoutMs);
 
@@ -354,7 +435,13 @@ export function createCamera(config: CameraConfig): CameraModule {
           clearTimeout(timer);
           const buf = Buffer.concat(chunks);
           if (code !== 0 && buf.length === 0) {
-            reject(new Error(`ffmpeg exited with code ${code}`));
+            const lastLine = stderrTail.lines().pop();
+            const detail = lastLine ? `: ${lastLine}` : "";
+            reject(
+              new Error(
+                formatFfmpegLog(`ffmpeg exited with code ${code}${detail}`)
+              )
+            );
             return;
           }
           resolve(buf);

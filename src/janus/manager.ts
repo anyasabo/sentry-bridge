@@ -4,6 +4,7 @@ import * as path from "path";
 import * as os from "os";
 import WebSocket from "ws";
 import { calculateDelay } from "../lib/retry";
+import { terminate } from "../lib/terminate";
 import {
   resilienceConfig,
   janusDebugLevel,
@@ -35,6 +36,10 @@ export function createJanusManager(): JanusManager {
   let janusBinary: string | null = null;
   let janusMode: JanusMode = "unavailable";
   let externalPollTimer: ReturnType<typeof setTimeout> | null = null;
+  let bundledWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
+  // Bumped whenever a watchdog (re)starts or stops; a probe still in flight
+  // from an older chain sees the mismatch and ends instead of re-arming.
+  let watchdogGeneration = 0;
   const wsUrl = `ws://127.0.0.1:${JANUS_WS_PORT}`;
 
   function findJanusBinary(): string | null {
@@ -153,10 +158,12 @@ export function createJanusManager(): JanusManager {
   /** Periodic health check for external Janus — fires every 10s. */
   function startHostedWatchdog(): void {
     const INTERVAL_MS = 10_000;
+    const gen = resetWatchdogs();
     function tick() {
-      if (stopped || janusMode !== "hosted") return;
+      if (stopped || gen !== watchdogGeneration || janusMode !== "hosted")
+        return;
       probeWs().then((reachable) => {
-        if (stopped) return;
+        if (stopped || gen !== watchdogGeneration) return;
         if (
           !reachable &&
           healthMonitor.getHealth().janus !== HealthState.RECOVERING
@@ -169,7 +176,7 @@ export function createJanusManager(): JanusManager {
             ErrorSeverity.ERROR
           );
           healthMonitor.incrementRestarts("janus");
-          scheduleExternalRecoveryPoll();
+          scheduleExternalRecoveryPoll(gen);
         } else if (reachable) {
           externalPollTimer = setTimeout(tick, INTERVAL_MS);
         }
@@ -179,22 +186,61 @@ export function createJanusManager(): JanusManager {
   }
 
   /** Poll WS until reachable again — only used in external mode. */
-  function scheduleExternalRecoveryPoll(): void {
-    if (stopped) return;
+  function scheduleExternalRecoveryPoll(gen: number): void {
+    if (stopped || gen !== watchdogGeneration) return;
     const delay = calculateDelay(restartAttempt, resilienceConfig.retry);
     restartAttempt++;
     externalPollTimer = setTimeout(async () => {
-      if (stopped) return;
+      if (stopped || gen !== watchdogGeneration) return;
       const reachable = await probeWs();
+      if (stopped || gen !== watchdogGeneration) return;
       if (reachable) {
         console.log("[janus] Hosted Janus reachable again");
         restartAttempt = 0;
         healthMonitor.setState("janus", HealthState.HEALTHY);
         if (crashCallback) crashCallback();
       } else {
-        scheduleExternalRecoveryPoll();
+        scheduleExternalRecoveryPoll(gen);
       }
     }, delay);
+  }
+
+  /** Ends any running watchdog chain; returns the generation for a new one. */
+  function resetWatchdogs(): number {
+    if (externalPollTimer) {
+      clearTimeout(externalPollTimer);
+      externalPollTimer = null;
+    }
+    if (bundledWatchdogTimer) {
+      clearTimeout(bundledWatchdogTimer);
+      bundledWatchdogTimer = null;
+    }
+    return ++watchdogGeneration;
+  }
+
+  /** A hung Janus never exits, so `close` alone can't catch it. */
+  function startBundledWatchdog(): void {
+    const INTERVAL_MS = 10_000;
+    const MAX_MISSED_PROBES = 3;
+    const gen = resetWatchdogs();
+    let missed = 0;
+    async function tick() {
+      if (stopped || gen !== watchdogGeneration) return;
+      // No process means a restart is pending; the close handler owns it.
+      const reachable = proc ? await probeWs() : true;
+      if (stopped || gen !== watchdogGeneration) return;
+      missed = reachable ? 0 : missed + 1;
+      if (missed >= MAX_MISSED_PROBES && proc) {
+        console.warn(
+          `[janus] No answer on ${wsUrl} for ${MAX_MISSED_PROBES} probes — killing Janus`
+        );
+        healthMonitor.setState("janus", HealthState.RECOVERING);
+        missed = 0;
+        terminate(proc);
+      }
+      bundledWatchdogTimer = setTimeout(tick, INTERVAL_MS);
+    }
+    bundledWatchdogTimer = setTimeout(tick, INTERVAL_MS);
   }
 
   function spawnEmbedded(): void {
@@ -282,6 +328,8 @@ export function createJanusManager(): JanusManager {
         } else {
           healthMonitor.setState("janus", HealthState.DOWN);
         }
+        // Also when not ready: a Janus that hangs from the start never exits.
+        startBundledWatchdog();
         return ready;
       }
 
@@ -301,8 +349,9 @@ export function createJanusManager(): JanusManager {
         return ready;
       }
 
-      // auto: 1. quick probe → hosted
-      const quickProbe = await probeWs(2000);
+      // auto: 1. quick probe → hosted. Skipped once bundled: our own Janus
+      // would answer it and be mistaken for a hosted one.
+      const quickProbe = janusMode !== "bundled" && (await probeWs(2000));
       if (quickProbe) {
         janusMode = "hosted";
         console.log("[janus] Hosted Janus detected on", wsUrl);
@@ -325,6 +374,8 @@ export function createJanusManager(): JanusManager {
         } else {
           healthMonitor.setState("janus", HealthState.DOWN);
         }
+        // Also when not ready: a Janus that hangs from the start never exits.
+        startBundledWatchdog();
         return ready;
       }
 
@@ -346,12 +397,9 @@ export function createJanusManager(): JanusManager {
 
     stop(): void {
       stopped = true;
-      if (externalPollTimer) {
-        clearTimeout(externalPollTimer);
-        externalPollTimer = null;
-      }
+      resetWatchdogs();
       if (proc) {
-        proc.kill();
+        terminate(proc);
         proc = null;
       }
       healthMonitor.setState("janus", HealthState.DOWN);
