@@ -606,11 +606,15 @@ export function createObicoAgent(
         new Blob([new Uint8Array(jpeg)], { type: "image/jpeg" }),
         "pic.jpg"
       );
-      await http.fetch(apiUrl(config.serverUrl, "/api/v1/octo/pic/"), {
-        method: "POST",
-        headers: { Authorization: `Token ${config.apiKey}` },
-        body: form,
-      });
+      const res = await http.fetch(
+        apiUrl(config.serverUrl, "/api/v1/octo/pic/"),
+        {
+          method: "POST",
+          headers: { Authorization: `Token ${config.apiKey}` },
+          body: form,
+        }
+      );
+      if (!res.ok) throw new Error(`sendFrame failed: ${res.status}`);
     },
 
     async fetchPrinterId(): Promise<number | null> {

@@ -155,20 +155,28 @@ export function diffConfig(prev: Config, next: Config) {
   };
 }
 
-function registerFrameForwarding(
+export function registerFrameForwarding(
   camera: ReturnType<typeof createCamera>,
   agent: ReturnType<typeof createObicoAgent>,
   uploadIntervalMs: number
 ): void {
   let lastUpload = 0;
+  let uploadFailing = false;
   camera.onFrame(async (frame) => {
     const now = Date.now();
     if (now - lastUpload < uploadIntervalMs) return;
     lastUpload = now;
     try {
       await agent.sendFrame(frame);
-    } catch {
-      // non-fatal
+      if (uploadFailing) console.log("[bridge] Frame uploads recovered");
+      uploadFailing = false;
+    } catch (err) {
+      // non-fatal, but without frames Obico detects nothing, so say so once
+      if (!uploadFailing) {
+        const reason = err instanceof Error ? err.message : String(err);
+        console.warn(`[bridge] Frame upload failing: ${reason}`);
+      }
+      uploadFailing = true;
     }
   });
 }

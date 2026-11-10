@@ -335,6 +335,18 @@ describe("sendFrame()", () => {
     const body = callArgs.body as FormData;
     expect(body.get("pic")).not.toBeNull();
   });
+
+  it("rejects when the server refuses the frame", async () => {
+    mockFetch.mockResolvedValue(mockResponse(400));
+    const agent = createObicoAgent(
+      { serverUrl: "http://obico.local", apiKey: "test-key" },
+      mockHttp,
+      mockDispatcher
+    );
+    await expect(agent.sendFrame(Buffer.from([0xff, 0xd9]))).rejects.toThrow(
+      "400"
+    );
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
