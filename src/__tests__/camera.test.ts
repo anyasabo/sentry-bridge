@@ -54,6 +54,11 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
+// Also restores real timers when a test fails before reaching its end.
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 describe("Camera", () => {
   describe("testStream()", () => {
     it("spawns ffmpeg with correct args and returns a Buffer", async () => {
@@ -106,7 +111,6 @@ describe("Camera", () => {
       await Promise.resolve(); // Microtask-Queue drainieren
       await expect(promise).rejects.toThrow(/timed out/i);
       expect(proc.kill).toHaveBeenCalled();
-      jest.useRealTimers();
     });
   });
 
@@ -188,7 +192,6 @@ describe("Camera", () => {
       expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
 
       camera.stop();
-      jest.useRealTimers();
     });
 
     it("does not SIGKILL when ffmpeg exits after the watchdog's SIGTERM", () => {
@@ -206,7 +209,6 @@ describe("Camera", () => {
       expect(proc.kill).toHaveBeenCalledTimes(1);
 
       camera.stop();
-      jest.useRealTimers();
     });
 
     it("escalates to SIGKILL when ffmpeg ignores SIGTERM on stop()", () => {
@@ -218,7 +220,6 @@ describe("Camera", () => {
       camera.stop();
       jest.advanceTimersByTime(5_000);
       expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
-      jest.useRealTimers();
     });
 
     it("escalates to SIGKILL when the RTP ffmpeg ignores the watchdog", () => {
@@ -234,7 +235,6 @@ describe("Camera", () => {
       expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
 
       camera.stopRtpStream();
-      jest.useRealTimers();
     });
 
     it("escalates to SIGKILL when the RTP ffmpeg ignores SIGTERM on stop", () => {
@@ -246,7 +246,6 @@ describe("Camera", () => {
       camera.stopRtpStream();
       jest.advanceTimersByTime(5_000);
       expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
-      jest.useRealTimers();
     });
 
     it("escalates to SIGKILL when ffmpeg ignores testStream()'s timeout", async () => {
@@ -258,7 +257,6 @@ describe("Camera", () => {
       await expect(pending).rejects.toThrow("timed out");
       jest.advanceTimersByTime(5_000);
       expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
-      jest.useRealTimers();
     });
 
     it("reports the camera as recovering as soon as the watchdog fires", () => {
@@ -283,7 +281,6 @@ describe("Camera", () => {
       camera.stop();
       setState.mockRestore();
       pushError.mockRestore();
-      jest.useRealTimers();
     });
 
     it("reports the RTP stream as recovering as soon as its watchdog fires", () => {
@@ -310,7 +307,6 @@ describe("Camera", () => {
       camera.stopRtpStream();
       setState.mockRestore();
       pushError.mockRestore();
-      jest.useRealTimers();
     });
 
     it("keeps tracking the new ffmpeg when the old one closes late", () => {
@@ -388,7 +384,6 @@ describe("Camera", () => {
 
       camera.stop();
       warn.mockRestore();
-      jest.useRealTimers();
     });
 
     it("logs the stderr tail when the MJPEG watchdog fires", () => {
@@ -406,7 +401,6 @@ describe("Camera", () => {
 
       camera.stop();
       warn.mockRestore();
-      jest.useRealTimers();
     });
 
     it("includes the last stderr line in testStream()'s exit error", async () => {
