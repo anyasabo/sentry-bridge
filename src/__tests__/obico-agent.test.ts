@@ -2031,6 +2031,44 @@ describe("current_print_ts", () => {
     ]);
   });
 
+  it("gives the same job id a new start time once its print was ended with -1", async () => {
+    const store = memoryStore();
+    const errorStatus: PrinterStatus = { ...idleStatus, state: "ERROR" };
+    mockNow(1_700_000_000);
+    const first = await tsOf(store, [
+      [printingStatus, job41],
+      [errorStatus, null],
+    ]);
+    expect(store.saved[store.saved.length - 1]).toEqual({
+      jobId: 41,
+      ts: 1_700_000_000,
+      ended: true,
+    });
+    // After a restart, the same job continues: Obico refuses the ended ts.
+    mockNow(1_700_000_120);
+    const second = await tsOf(store, [[printingStatus, job41]]);
+    expect([...first, ...second]).toEqual([1_700_000_000, -1, 1_700_000_120]);
+    expect(store.saved[store.saved.length - 1]).toEqual({
+      jobId: 41,
+      ts: 1_700_000_120,
+    });
+  });
+
+  it("marks the print as ended only once across repeated -1 ticks", async () => {
+    const store = memoryStore();
+    mockNow(1_700_000_000);
+    await tsOf(store, [
+      [printingStatus, job41],
+      [finishedStatus, null],
+      [finishedStatus, null],
+      [idleStatus, null],
+    ]);
+    expect(store.saved).toEqual([
+      { jobId: 41, ts: 1_700_000_000 },
+      { jobId: 41, ts: 1_700_000_000, ended: true },
+    ]);
+  });
+
   it("resets the cached job on PRINTING → ATTENTION → IDLE", async () => {
     const store = memoryStore();
     const msgs = await run(store, [

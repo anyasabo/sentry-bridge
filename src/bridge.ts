@@ -9,10 +9,18 @@ import { createPrusaLinkClient } from "./prusalink/client";
 import { createCamera } from "./camera/camera";
 import { setCameraInstance } from "./camera/registry";
 import { createObicoAgent } from "./obico/agent";
+import {
+  createFilePrintStartStore,
+  printStartStorePath,
+} from "./obico/print-start-store";
 import { HttpFetcher } from "./obico/types";
 import { createJanusManager } from "./janus/manager";
 import { createJanusRelay } from "./janus/relay";
-import { setJanusMode, healthMonitor, circuitBreakerRegistry } from "./lib/health";
+import {
+  setJanusMode,
+  healthMonitor,
+  circuitBreakerRegistry,
+} from "./lib/health";
 import { HealthState } from "./lib/health-monitor";
 import type { ComponentName } from "./lib/health-monitor";
 
@@ -219,7 +227,8 @@ async function applyConfigChange(newConfig: Config): Promise<void> {
         localPort: currentPort,
       },
       httpFetcher,
-      state.prusaClient!
+      state.prusaClient!,
+      createFilePrintStartStore(printStartStorePath())
     );
     registerFrameForwarding(
       state.camera,
@@ -242,7 +251,9 @@ async function applyConfigChange(newConfig: Config): Promise<void> {
 
 export type ReconnectTarget = "prusalink" | "obico" | "camera";
 
-export async function reconnectComponent(component: ReconnectTarget): Promise<void> {
+export async function reconnectComponent(
+  component: ReconnectTarget
+): Promise<void> {
   console.log("[bridge] Reconnecting component:", component);
 
   if (!currentConfig) {
@@ -285,7 +296,8 @@ export async function reconnectComponent(component: ReconnectTarget): Promise<vo
         localPort: currentPort,
       },
       httpFetcher,
-      state.prusaClient
+      state.prusaClient,
+      createFilePrintStartStore(printStartStorePath())
     );
     registerFrameForwarding(
       state.camera,
@@ -308,7 +320,8 @@ export async function reconnectComponent(component: ReconnectTarget): Promise<vo
         localPort: currentPort,
       },
       httpFetcher,
-      state.prusaClient
+      state.prusaClient,
+      createFilePrintStartStore(printStartStorePath())
     );
     registerFrameForwarding(
       state.camera,
@@ -439,7 +452,8 @@ export async function startBridge(port = 3000): Promise<void> {
       localPort: port,
     },
     httpFetcher,
-    state.prusaClient
+    state.prusaClient,
+    createFilePrintStartStore(printStartStorePath())
   );
 
   registerFrameForwarding(

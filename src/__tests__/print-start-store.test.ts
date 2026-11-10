@@ -3,6 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import {
   createFilePrintStartStore,
+  createMemoryPrintStartStore,
   printStartStorePath,
 } from "../obico/print-start-store";
 
@@ -41,11 +42,38 @@ describe("createFilePrintStartStore()", () => {
     });
   });
 
+  it("keeps the ended flag", () => {
+    createFilePrintStartStore(file).save({
+      jobId: 41,
+      ts: 1_700_000_000,
+      ended: true,
+    });
+    expect(createFilePrintStartStore(file).load()).toEqual({
+      jobId: 41,
+      ts: 1_700_000_000,
+      ended: true,
+    });
+  });
+
+  it("writes atomically and leaves no temp file behind", () => {
+    createFilePrintStartStore(file).save({ jobId: 41, ts: 1_700_000_000 });
+    expect(fs.readdirSync(dir)).toEqual(["print-state.json"]);
+  });
+
   it("does not throw when the file cannot be written", () => {
     const store = createFilePrintStartStore(
       path.join(dir, "missing-dir", "print-state.json")
     );
     expect(() => store.save({ jobId: 41, ts: 1_700_000_000 })).not.toThrow();
+  });
+});
+
+describe("createMemoryPrintStartStore()", () => {
+  it("starts empty and returns what was saved", () => {
+    const store = createMemoryPrintStartStore();
+    expect(store.load()).toBeNull();
+    store.save({ jobId: 41, ts: 1_700_000_000 });
+    expect(store.load()).toEqual({ jobId: 41, ts: 1_700_000_000 });
   });
 });
 

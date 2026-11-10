@@ -1,11 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { configPath } from "../config/config";
 
 /** The start time the bridge assigned to a PrusaLink job id. */
 export interface PrintStart {
   jobId: number;
   /** Unix seconds; sent to Obico as current_print_ts. */
   ts: number;
+  /** Set once -1 was sent: Obico refuses this ts again, so the job id needs a new one. */
+  ended?: boolean;
 }
 
 export interface PrintStartStore {
@@ -15,8 +18,18 @@ export interface PrintStartStore {
 
 /** print-state.json in the directory of the config file. */
 export function printStartStorePath(): string {
-  const configPath = process.env.CONFIG_PATH ?? "/config/config.json";
-  return path.join(path.dirname(configPath), "print-state.json");
+  return path.join(path.dirname(configPath()), "print-state.json");
+}
+
+/** Keeps the PrintStart in memory only, e.g. for the pairing agent. */
+export function createMemoryPrintStartStore(): PrintStartStore {
+  let current: PrintStart | null = null;
+  return {
+    load: () => current,
+    save: (record) => {
+      current = record;
+    },
+  };
 }
 
 /**
@@ -28,16 +41,22 @@ export function createFilePrintStartStore(filePath: string): PrintStartStore {
     load() {
       try {
         const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-        return Number.isInteger(data?.jobId) && Number.isInteger(data?.ts)
-          ? { jobId: data.jobId, ts: data.ts }
-          : null;
+        if (!Number.isInteger(data?.jobId) || !Number.isInteger(data?.ts))
+          return null;
+        return data.ended === true
+          ? { jobId: data.jobId, ts: data.ts, ended: true }
+          : { jobId: data.jobId, ts: data.ts };
       } catch {
         return null;
       }
     },
     save(record) {
+      // Write a temp file in the same directory, then rename: a crash mid-write
+      // never leaves a truncated print-state.json behind.
+      const tmpPath = `${filePath}.tmp`;
       try {
-        fs.writeFileSync(filePath, JSON.stringify(record), "utf-8");
+        fs.writeFileSync(tmpPath, JSON.stringify(record), "utf-8");
+        fs.renameSync(tmpPath, filePath);
       } catch (err) {
         console.error(
           "[obico] could not save print start to",

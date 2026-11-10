@@ -14,8 +14,7 @@ import {
 import { PrinterStatus, JobInfo } from "../prusalink/types";
 import {
   PrintStartStore,
-  createFilePrintStartStore,
-  printStartStorePath,
+  createMemoryPrintStartStore,
 } from "./print-start-store";
 import { createCircuitBreaker } from "../lib/circuit-breaker";
 import { calculateDelay } from "../lib/retry";
@@ -27,9 +26,7 @@ export function createObicoAgent(
   config: ObicoAgentConfig,
   http: HttpFetcher,
   dispatcher: PrusaLinkCommandDispatcher,
-  printStartStore: PrintStartStore = createFilePrintStartStore(
-    printStartStorePath()
-  )
+  printStartStore: PrintStartStore = createMemoryPrintStartStore()
 ): ObicoAgent {
   const cb = createCircuitBreaker(resilienceConfig.circuitBreaker);
   circuitBreakerRegistry.set("obico_ws", cb);
@@ -42,11 +39,12 @@ export function createObicoAgent(
   let cachedJob: JobInfo | null = null;
   let printStart = printStartStore.load();
 
-  // Start time of the given PrusaLink job: the stored one if the job id matches,
-  // otherwise now (a new print), persisted so a restarted bridge sends the same value.
+  // Start time of the given PrusaLink job: the stored one if the job id matches and
+  // its print was not ended yet, otherwise now (a new print in Obico). Persisted so a
+  // restarted bridge sends the same value.
   function printStartTsFor(job: JobInfo | null): number | null {
     if (job === null) return null;
-    if (printStart?.jobId !== job.id) {
+    if (printStart?.jobId !== job.id || printStart.ended) {
       printStart = { jobId: job.id, ts: Math.floor(Date.now() / 1000) };
       printStartStore.save(printStart);
     }
@@ -585,6 +583,13 @@ export function createObicoAgent(
         json.substring(0, 200)
       );
       ws.send(json);
+
+      // -1 ends the print in Obico, which then refuses its ts ("re-surrected").
+      // Remember that, so the same job id gets a new ts if it shows up active again.
+      if (msg.current_print_ts === -1 && printStart && !printStart.ended) {
+        printStart = { ...printStart, ended: true };
+        printStartStore.save(printStart);
+      }
 
       lastPrintState = status.state;
 
