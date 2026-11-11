@@ -7,9 +7,11 @@ import healthRouter from "./routes/health";
 import bridgeRouter from "./routes/bridge";
 import filesRouter from "./routes/files";
 import bootChecksRouter from "./routes/boot-checks";
+import { requestGuard } from "./lib/request-guard";
 
 export const app = express();
 
+app.use(requestGuard());
 app.use(express.json());
 
 app.use("/api/health", healthRouter);

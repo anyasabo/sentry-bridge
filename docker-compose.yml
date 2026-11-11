@@ -12,6 +12,10 @@ services:
     environment:
       - PORT=3000
       - CONFIG_PATH=/config/config.json
+      # Extra hostnames (comma-separated) for access via DNS names with dots,
+      # e.g. a reverse proxy or Tailscale MagicDNS. IPs, localhost, single-label
+      # and *.local names are always allowed.
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
       # Resilience — override defaults from .env.example as needed
       - CIRCUIT_BREAKER_THRESHOLD=5
       - CIRCUIT_BREAKER_RESET_TIMEOUT_MS=60000

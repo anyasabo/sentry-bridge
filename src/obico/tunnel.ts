@@ -184,9 +184,19 @@ export async function handleTunnelRequest(
   }
 
   // Drop any client Accept-Encoding: the response body goes back as raw bytes.
+  // Drop Host, Origin and Sec-Fetch-*: the bridge makes this request itself,
+  // and the request guard would reject Obico's values.
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(tunnel.headers ?? {})) {
-    if (k.toLowerCase() !== "accept-encoding") headers[k] = v;
+    const key = k.toLowerCase();
+    if (
+      key === "accept-encoding" ||
+      key === "host" ||
+      key === "origin" ||
+      key.startsWith("sec-fetch-")
+    )
+      continue;
+    headers[k] = v;
   }
   headers["Accept-Encoding"] = "identity";
   // Obico sends the request body as raw bytes (BSON binary)
