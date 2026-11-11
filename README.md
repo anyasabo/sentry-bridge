@@ -14,6 +14,9 @@ Standalone Docker service that connects Prusa Core One printers (via PrusaLink) 
 - WebRTC live stream via Janus in the Obico control panel
 - Pause / resume / cancel from Obico
 
+> [!WARNING]
+> **No login. LAN or VPN only.** The web UI and REST API have no authentication. Anyone who can reach the port has full control of the bridge and the printer. Never expose it to the internet: no port forwarding, no public IP, no reverse proxy without its own authentication. See [SECURITY.md](SECURITY.md).
+
 ## What it does
 
 The bridge acts as a translator between your Prusa Core One printer and Obico. It polls the printer's PrusaLink HTTP API for status and job data, captures the RTSP camera stream via ffmpeg, and forwards everything to Obico over WebSocket. The Obico control panel then shows your printer's state, lets you watch the live stream, and can pause or cancel a print if the AI detects a failure.
@@ -33,18 +36,21 @@ Pull the image and run it with your Docker host's LAN IP:
 
 ```bash
 docker run -d \
-  -p 3000:3000 \
-  -p 10100-10200:10100-10200/udp \
+  -p 192.168.1.x:3000:3000 \
+  -p 192.168.1.x:10100-10200:10100-10200/udp \
   -v ./config:/config \
   -e JANUS_HOST_IP=192.168.1.x \
   rleban/sentry-bridge:latest
 ```
 
 ```bash
-# Open http://localhost:3000 → follow setup wizard
+# Open http://192.168.1.x:3000 → follow setup wizard
 ```
 
-Replace `192.168.1.x` with the LAN IP of the machine running Docker. Without this, the WebRTC live stream will not work.
+Replace `192.168.1.x` (three places) with the LAN IP of the machine running Docker. It is used for WebRTC and as the only address the ports are published on, so the bridge is not reachable on other interfaces. Because of this, `http://localhost:3000` does not work on the Docker host; use the LAN IP.
+
+> [!NOTE]
+> Docker-published ports bypass host firewalls such as `ufw` or `firewalld` (Docker manages its own iptables rules). Binding to the LAN IP, as above, is what keeps the port off other interfaces; a firewall rule on the host does not. For VPN access when the VPN runs on the Docker host itself, see [Access through a VPN](docs/guide/how-to/docker-compose.md#access-through-a-vpn).
 
 For the full guide → [docs/guide/](docs/guide/)
 
@@ -58,8 +64,8 @@ services:
     image: rleban/sentry-bridge:latest
     container_name: sentry-bridge
     ports:
-      - "3000:3000"
-      - "10100-10200:10100-10200/udp" # WebRTC ICE media (browser ↔ Janus)
+      - "${JANUS_HOST_IP:?set JANUS_HOST_IP to the Docker host LAN IP}:3000:3000"
+      - "${JANUS_HOST_IP:?set JANUS_HOST_IP to the Docker host LAN IP}:10100-10200:10100-10200/udp" # WebRTC ICE media (browser ↔ Janus)
     volumes:
       - ./config:/config
     environment:
@@ -88,8 +94,9 @@ services:
 ```
 
 ```bash
-docker compose up -d
-# Open http://localhost:3000 → follow setup wizard
+# JANUS_HOST_IP must be set (shell or .env file); compose fails with an error if it is missing
+JANUS_HOST_IP=192.168.1.x docker compose up -d
+# Open http://192.168.1.x:3000 → follow setup wizard
 ```
 
 The repo includes a ready-to-use [`docker-compose.yml`](./docker-compose.yml) — just clone and run.
@@ -111,8 +118,8 @@ services:
     image: rleban/sentry-bridge:latest
     container_name: sentry-bridge-core-one
     ports:
-      - "3000:3000"
-      - "10100-10200:10100-10200/udp"
+      - "${JANUS_HOST_IP:?set JANUS_HOST_IP to the Docker host LAN IP}:3000:3000"
+      - "${JANUS_HOST_IP:?set JANUS_HOST_IP to the Docker host LAN IP}:10100-10200:10100-10200/udp"
     volumes:
       - ./config-core-one:/config
     environment:
@@ -124,8 +131,8 @@ services:
     image: rleban/sentry-bridge:latest
     container_name: sentry-bridge-core-one-l
     ports:
-      - "3001:3000"
-      - "10300-10400:10300-10400/udp"
+      - "${JANUS_HOST_IP:?set JANUS_HOST_IP to the Docker host LAN IP}:3001:3000"
+      - "${JANUS_HOST_IP:?set JANUS_HOST_IP to the Docker host LAN IP}:10300-10400:10300-10400/udp"
     volumes:
       - ./config-core-one-l:/config
     environment:
@@ -134,7 +141,7 @@ services:
     restart: unless-stopped
 ```
 
-Open `http://<host>:3000` and `http://<host>:3001` and run the Setup Wizard once per printer.
+Open `http://<JANUS_HOST_IP>:3000` and `http://<JANUS_HOST_IP>:3001` and run the Setup Wizard once per printer.
 
 Footprint per container (measured): about 210 MB RAM and about a third of one CPU core, mostly ffmpeg for the camera. The image (~625 MB) is stored once on disk and shared by all containers.
 
@@ -188,7 +195,7 @@ The wizard writes `/config/config.json` on the mounted volume. All fields can al
 
 ## Setup Wizard
 
-On first start the bridge serves a 4-step wizard at `http://localhost:3000`:
+On first start the bridge serves a 4-step wizard at `http://<JANUS_HOST_IP>:3000`:
 
 1. **PrusaLink** — enter printer URL (e.g. `http://192.168.x.x`), username (`maker`), and password. The wizard performs a live connection test before continuing.
 2. **Camera** — the wizard probes `rtsp://[printer-ip]/live` and shows a preview frame. This step is **mandatory** — it blocks until a frame is received.
@@ -202,7 +209,7 @@ These are intentional product decisions, not bugs:
 - **One container = one printer.** Simplifies config, isolation, and restarts. Run multiple containers on different ports for multiple printers.
 - **RTSP camera is mandatory.** Obico's AI failure detection requires a live stream — there is no "disable camera" mode.
 - **Built for the LAN, without authentication.** The web UI and the REST API have no login. Anyone who can reach port 3000 can change the config, pause or cancel prints, start and delete files. Do not expose port 3000 to the internet or to networks you don't trust. For remote access, put the bridge behind a VPN (e.g. Tailscale or WireGuard) or a reverse proxy with its own authentication.
-- **Manual printer controls are limited to pause / resume / cancel.** The PrusaLink API does not expose file upload, filament load/unload, or print queue management, so the bridge does not either.
+- **Manual printer controls are limited.** Besides pause / resume / cancel, the bridge can list, upload (`POST /api/files/upload`), start and delete G-code files. It does not offer filament load/unload or print queue management.
 
 ## Troubleshooting
 

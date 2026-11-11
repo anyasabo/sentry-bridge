@@ -2,6 +2,9 @@
 
 Get SentryBridge running and your Prusa printer connected to Obico in under 10 minutes.
 
+> [!WARNING]
+> **No login. LAN or VPN only.** The web UI and REST API have no authentication. Anyone who can reach the port has full control of the bridge and the printer. Never expose it to the internet: no port forwarding, no public IP, no reverse proxy without its own authentication. See [SECURITY.md](../../../SECURITY.md).
+
 **What you will have at the end:** Container running, Setup Wizard completed, Dashboard visible with live printer status and camera stream forwarded to Obico.
 
 ---
@@ -34,8 +37,8 @@ Run this command, replacing `192.168.1.x` with the LAN IP of your Docker host:
 
 ```bash
 docker run -d \
-  -p 3000:3000 \
-  -p 10100-10200:10100-10200/udp \
+  -p 192.168.1.x:3000:3000 \
+  -p 192.168.1.x:10100-10200:10100-10200/udp \
   -v ./config:/config \
   -e JANUS_HOST_IP=192.168.1.x \
   rleban/sentry-bridge:latest
@@ -43,13 +46,16 @@ docker run -d \
 
 Expected result: Docker pulls the image and prints a container ID. The command returns immediately.
 
-If you see `port is already allocated`: Another service is using port 3000. Change the left side of `-p 3000:3000` to a free port, e.g. `-p 3001:3000`, and open `http://localhost:3001` in step 2.
+If you see `port is already allocated`: Another service is using port 3000. Change the host port in `-p 192.168.1.x:3000:3000` to a free one, e.g. `-p 192.168.1.x:3001:3000`, and open `http://192.168.1.x:3001` in step 2.
+
+> [!NOTE]
+> Docker-published ports bypass host firewalls such as `ufw` or `firewalld` (Docker manages its own iptables rules). Binding to the LAN IP, is what keeps the port off other interfaces; a firewall rule on the host does not.
 
 ---
 
 ## Step 2 — Open the Setup Wizard
 
-Open `http://localhost:3000` in your browser.
+Open `http://192.168.1.x:3000` in your browser (the LAN IP from step 1; `localhost` does not work because the port is bound to that IP).
 
 Expected result: The SentryBridge Setup Wizard opens at step 1 of 4.
 

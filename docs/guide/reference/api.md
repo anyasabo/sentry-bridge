@@ -18,7 +18,7 @@ All examples assume SentryBridge is running on the default port:
 http://localhost:3000
 ```
 
-Replace `localhost:3000` with your host and port if you changed the `PORT` variable.
+Replace `localhost:3000` with your host and port. With the default compose file and `docker run` examples the port is published on `JANUS_HOST_IP` only, so use that IP instead of `localhost`. The API has no authentication: LAN/VPN only, see [SECURITY.md](../../../SECURITY.md).
 
 ---
 

@@ -75,6 +75,20 @@ First production-ready release. Covers Milestone 1 (Working Bridge) and Mileston
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: published ports are bound to the host LAN IP.** `docker-compose.yml`, the README, and the docs now publish the web port and the Janus UDP range as `${JANUS_HOST_IP}:<port>` instead of on all interfaces. `JANUS_HOST_IP` is now required: `docker compose up` fails with an error if it is unset or empty, and `docker run` examples use `-p <LAN-IP>:3000:3000`. Existing setups must set `JANUS_HOST_IP` (e.g. in `.env`) before upgrading their compose file, and open the UI at `http://<JANUS_HOST_IP>:3000` instead of `http://localhost:3000`. (#90)
+
+### Added
+
+- `SECURITY.md` with the supported deployment (private LAN or VPN), trust assumptions, and how to report vulnerabilities (#90)
+- Warning that the bridge has no authentication in the README, quickstart, and Docker Compose guide, and a startup log line stating it (#90)
+- Note that Docker-published ports bypass host firewalls such as `ufw` (#90)
+
+### Fixed
+
+- README no longer claims the bridge offers no file upload (`POST /api/files/upload`) (#90)
+
 ### Planned — Milestone 3
 
 - Print passthru — start print from Obico UI (#47)

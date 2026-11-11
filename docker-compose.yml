@@ -3,9 +3,10 @@ services:
     image: rleban/sentry-bridge:latest
     container_name: sentry-bridge
     build: .
+    # Published on the host LAN IP only (not on all interfaces). No authentication — LAN/VPN only, see SECURITY.md.
     ports:
-      - "${PORT:-3000}:3000"
-      - "${JANUS_RTP_PORT_RANGE:-10100-10200}:${JANUS_RTP_PORT_RANGE:-10100-10200}/udp" # WebRTC ICE media (browser ↔ Janus)
+      - "${JANUS_HOST_IP:?set JANUS_HOST_IP to the Docker host LAN IP}:${PORT:-3000}:3000"
+      - "${JANUS_HOST_IP:?set JANUS_HOST_IP to the Docker host LAN IP}:${JANUS_RTP_PORT_RANGE:-10100-10200}:${JANUS_RTP_PORT_RANGE:-10100-10200}/udp" # WebRTC ICE media (browser ↔ Janus)
     volumes:
       - ./config:/config
     environment:
