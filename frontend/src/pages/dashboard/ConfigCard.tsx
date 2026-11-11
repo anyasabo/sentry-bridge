@@ -5,13 +5,13 @@ import {
   Collapse,
   Group,
   NumberInput,
-  PasswordInput,
   Stack,
   TextInput,
   Title,
   Alert,
 } from "@mantine/core";
 import { IconCheck, IconSettings } from "@tabler/icons-react";
+import { SecretInput } from "../../components/SecretInput";
 import { useTranslation } from "react-i18next";
 
 interface ConfigForm {
@@ -19,10 +19,10 @@ interface ConfigForm {
   prusaLinkUrl: string;
   username: string;
   password: string;
+  passwordHint: string;
   rtspUrl: string;
   frameInterval: number;
   obicoServerUrl: string;
-  obicoApiKey: string;
   bridgeUrl: string;
 }
 
@@ -36,10 +36,10 @@ export function ConfigCard() {
     prusaLinkUrl: "",
     username: "",
     password: "",
+    passwordHint: "",
     rtspUrl: "",
     frameInterval: 10,
     obicoServerUrl: "",
-    obicoApiKey: "",
     bridgeUrl: "",
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -54,11 +54,11 @@ export function ConfigCard() {
           name: cfg.name ?? "",
           prusaLinkUrl: cfg.prusalink?.url ?? "",
           username: cfg.prusalink?.username ?? "",
-          password: cfg.prusalink?.password ?? "",
+          password: "",
+          passwordHint: cfg.prusalink?.passwordHint ?? "",
           rtspUrl: cfg.camera?.rtspUrl ?? "",
           frameInterval: cfg.camera?.frameIntervalSeconds ?? 10,
           obicoServerUrl: cfg.obico?.serverUrl ?? "",
-          obicoApiKey: cfg.obico?.apiKey ?? "",
           bridgeUrl: cfg.bridgeUrl ?? "",
         });
       })
@@ -87,7 +87,9 @@ export function ConfigCard() {
             rtspUrl: form.rtspUrl,
             frameIntervalSeconds: form.frameInterval,
           },
-          obico: { serverUrl: form.obicoServerUrl, apiKey: form.obicoApiKey },
+          // Empty key keeps the stored one; the backend refuses this if the
+          // server URL changed (that needs re-pairing in the wizard).
+          obico: { serverUrl: form.obicoServerUrl, apiKey: "" },
           polling: { statusIntervalMs: 5000 },
           bridgeUrl: form.bridgeUrl || undefined,
         }),
@@ -136,10 +138,11 @@ export function ConfigCard() {
             value={form.username}
             onChange={(e) => patch("username", e.currentTarget.value)}
           />
-          <PasswordInput
+          <SecretInput
             label={t("dashboard.config.password")}
             value={form.password}
             onChange={(e) => patch("password", e.currentTarget.value)}
+            hint={form.passwordHint}
           />
           <TextInput
             label={t("dashboard.config.rtsp_url")}

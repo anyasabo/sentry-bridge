@@ -77,6 +77,8 @@ Input validation occurs at system boundaries:
 
 - Wizard API routes validate required fields before forwarding to internal modules.
 - `POST /api/setup/save` validates all required config fields (prusalink URL/credentials, camera RTSP URL, Obico server URL + API key).
+- **Keep-on-empty secrets**: `GET /api/config` never returns the PrusaLink password or the Obico API key, so an empty secret in `POST /api/setup/save`, `POST /api/wizard/test-prusalink` and `POST /api/wizard/verify-pairing` falls back to the stored one, but only for the same target: the password only when URL and username equal the stored ones, the API key only when the Obico server URL equals the stored one. Otherwise the request fails with 400 (a password / new pairing is required), so a client cannot send a stored secret to a host of its choice. One helper (`mergeStoredSecrets` in `src/config/secrets.ts`) implements this rule.
+- **Pairing key stays in the backend**: `POST /api/wizard/verify-pairing` receives the setup, pairs, and saves the config with the new API key itself; the response does not contain the key.
 - `POST /api/control` validates the `action` field against an allowlist `["pause", "resume", "cancel"]`.
 
 ### Security Guards (http.tunnel)

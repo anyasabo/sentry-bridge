@@ -57,17 +57,22 @@ export function saveConfig(config: Config): void {
 }
 
 export function isConfigured(): boolean {
+  const config = tryLoadConfig();
+  return !!(
+    config?.prusalink?.url &&
+    config.prusalink?.username &&
+    config.prusalink?.password &&
+    config.camera?.rtspUrl &&
+    config.obico?.serverUrl &&
+    config.obico?.apiKey
+  );
+}
+
+/** The stored config, or null when none can be read. */
+export function tryLoadConfig(): Config | null {
   try {
-    const config = loadConfig();
-    return !!(
-      config.prusalink?.url &&
-      config.prusalink?.username &&
-      config.prusalink?.password &&
-      config.camera?.rtspUrl &&
-      config.obico?.serverUrl &&
-      config.obico?.apiKey
-    );
+    return loadConfig();
   } catch {
-    return false;
+    return null;
   }
 }

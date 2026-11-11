@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { createPrusaLinkClient } from "../prusalink/client";
 import { createCamera } from "../camera/camera";
-import { isConfigured } from "../config/config";
+import { Config, isConfigured, tryLoadConfig } from "../config/config";
+import { mergeStoredSecrets, SecretFallbackError } from "../config/secrets";
+import { resolveSetup, saveSetup, SetupError } from "./setup";
 import { createObicoAgent } from "../obico/agent";
 import { HttpFetcher, PrusaLinkCommandDispatcher } from "../obico/types";
 
@@ -17,11 +19,23 @@ const noopDispatcher: PrusaLinkCommandDispatcher = {
 const router = Router();
 
 router.post("/test-prusalink", async (req, res) => {
-  const { url, username, password } = req.body as {
+  const body = req.body as {
     url?: string;
     username?: string;
     password?: string;
   };
+  let password: string | undefined;
+  try {
+    password = mergeStoredSecrets({ prusalink: body }, tryLoadConfig())
+      .prusalink?.password;
+  } catch (err) {
+    if (err instanceof SecretFallbackError) {
+      res.status(400).json({ message: err.message });
+      return;
+    }
+    throw err;
+  }
+  const { url, username } = body;
 
   if (!url || !username || !password) {
     res
@@ -58,8 +72,10 @@ router.post("/test-camera", async (req, res) => {
   }
 });
 
+// Pairs with Obico and saves the whole setup with the new API key, so the key
+// never reaches the browser (nor the Obico http tunnel, which can call /api/).
 router.post("/verify-pairing", async (req, res) => {
-  const { obicoServerUrl, code } = req.body as {
+  const { obicoServerUrl, code, ...setup } = req.body as Partial<Config> & {
     obicoServerUrl?: string;
     code?: string;
   };
@@ -67,6 +83,23 @@ router.post("/verify-pairing", async (req, res) => {
   if (!obicoServerUrl || !code) {
     res.status(400).json({ message: "obicoServerUrl and code are required" });
     return;
+  }
+
+  // Validate the rest of the setup before pairing; the placeholder key is
+  // replaced by the paired one below.
+  const placeholder = "pending-pairing";
+  let config: Config;
+  try {
+    config = resolveSetup({
+      ...setup,
+      obico: { serverUrl: obicoServerUrl, apiKey: placeholder },
+    });
+  } catch (err) {
+    if (err instanceof SetupError || err instanceof SecretFallbackError) {
+      res.status(400).json({ message: err.message });
+      return;
+    }
+    throw err;
   }
 
   const agent = createObicoAgent(
@@ -77,7 +110,8 @@ router.post("/verify-pairing", async (req, res) => {
 
   try {
     const apiKey = await agent.waitForPairing(obicoServerUrl, code);
-    res.json({ apiKey, serverUrl: obicoServerUrl });
+    saveSetup({ ...config, obico: { serverUrl: obicoServerUrl, apiKey } });
+    res.json({ ok: true, serverUrl: obicoServerUrl });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Pairing failed";
     if (/timed out/i.test(message)) {

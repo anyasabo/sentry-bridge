@@ -19,11 +19,26 @@ export function StepObico() {
   const { data, setData, nextStep, prevStep } = useWizard();
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<Status>(
-    data.obicoApiKey ? "ok" : "idle"
+    data.obicoApiKeyHint ? "ok" : "idle"
   );
   const [errorMsg, setErrorMsg] = useState("");
 
-  const alreadyPaired = !!data.obicoApiKey;
+  const alreadyPaired = !!data.obicoApiKeyHint;
+
+  // The setup without the Obico API key: the backend keeps the stored key
+  // (same server only) or, on pairing, saves the new one itself, so the key
+  // never reaches the browser.
+  function setupBody() {
+    return {
+      prusalink: {
+        url: `http://${data.printerIp}`,
+        username: data.username,
+        password: data.password,
+      },
+      camera: { rtspUrl: data.rtspUrl, frameIntervalSeconds: 10 },
+      polling: { statusIntervalMs: 5000 },
+    };
+  }
 
   async function handleVerify() {
     setStatus("verifying");
@@ -32,13 +47,13 @@ export function StepObico() {
       const res = await fetch("/api/wizard/verify-pairing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ obicoServerUrl: data.obicoServerUrl, code }),
+        body: JSON.stringify({
+          ...setupBody(),
+          obicoServerUrl: data.obicoServerUrl,
+          code,
+        }),
       });
       if (res.ok) {
-        const body = await res.json();
-        const apiKey: string = body.apiKey;
-        setData({ obicoApiKey: apiKey, obicoServerUrl: data.obicoServerUrl });
-        await saveConfig(apiKey);
         setStatus("ok");
         setTimeout(nextStep, 1000);
       } else {
@@ -52,30 +67,21 @@ export function StepObico() {
     }
   }
 
-  async function saveConfig(apiKey: string) {
-    const saveRes = await fetch("/api/setup/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prusalink: {
-          url: `http://${data.printerIp}`,
-          username: data.username,
-          password: data.password,
-        },
-        camera: { rtspUrl: data.rtspUrl, frameIntervalSeconds: 10 },
-        obico: { serverUrl: data.obicoServerUrl, apiKey },
-        polling: { statusIntervalMs: 5000 },
-      }),
-    });
-    if (!saveRes.ok) {
-      const body = await saveRes.json().catch(() => ({}));
-      throw new Error(body.message ?? "Failed to save config");
-    }
-  }
-
   async function handleSkip() {
     try {
-      await saveConfig(data.obicoApiKey);
+      // Already paired: save with an empty key so the stored one is kept.
+      const res = await fetch("/api/setup/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...setupBody(),
+          obico: { serverUrl: data.obicoServerUrl, apiKey: "" },
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message ?? "Failed to save config");
+      }
       nextStep();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to save");
@@ -116,7 +122,7 @@ export function StepObico() {
             variant="subtle"
             size="xs"
             onClick={() => {
-              setData({ obicoApiKey: "" });
+              setData({ obicoApiKeyHint: "" });
               setStatus("idle");
             }}
           >

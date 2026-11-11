@@ -1,5 +1,7 @@
 import { Router, Request, Response } from "express";
-import { loadConfig, saveConfig, Config } from "../config/config";
+import { loadConfig, Config } from "../config/config";
+import { toPublicConfig, SecretFallbackError } from "../config/secrets";
+import { resolveSetup, saveSetup, SetupError } from "./setup";
 import { createPrusaLinkClient } from "../prusalink/client";
 import { createCamera } from "../camera/camera";
 import { getCameraInstance } from "../camera/registry";
@@ -13,8 +15,7 @@ const router = Router();
 
 router.get("/config", (_req: Request, res: Response) => {
   try {
-    const config = loadConfig();
-    res.json(config);
+    res.json(toPublicConfig(loadConfig()));
   } catch {
     res.status(404).json({ message: "Not configured" });
   }
@@ -191,34 +192,19 @@ router.post("/control", async (req: Request, res: Response) => {
 // ── Config save: POST /api/setup/save ─────────────────────────────────────
 
 router.post("/setup/save", (req: Request, res: Response) => {
-  const body = req.body as Partial<Config>;
-
-  if (
-    !body.prusalink?.url ||
-    !body.prusalink?.username ||
-    !body.prusalink?.password ||
-    !body.camera?.rtspUrl ||
-    !body.obico?.serverUrl ||
-    !body.obico?.apiKey
-  ) {
-    res.status(400).json({ message: "All config fields are required" });
-    return;
+  let config: Config;
+  try {
+    config = resolveSetup(req.body as Partial<Config>);
+  } catch (err) {
+    if (err instanceof SetupError || err instanceof SecretFallbackError) {
+      res.status(400).json({ message: err.message });
+      return;
+    }
+    throw err;
   }
 
   try {
-    saveConfig({
-      name: body.name || undefined,
-      prusalink: body.prusalink,
-      camera: {
-        rtspUrl: body.camera.rtspUrl,
-        frameIntervalSeconds: body.camera.frameIntervalSeconds ?? 10,
-      },
-      obico: body.obico,
-      polling: body.polling ?? { statusIntervalMs: 5000 },
-    });
-    startBridge().catch((err) =>
-      console.error("[bridge] Failed to start after config save:", err)
-    );
+    saveSetup(config);
     res.json({ ok: true });
   } catch (err) {
     const message =

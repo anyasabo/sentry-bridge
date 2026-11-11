@@ -150,6 +150,8 @@ export default {
     },
   },
   common: {
+    secret_keep_hint:
+      "A value is stored (shown masked). Leave empty to keep it.",
     language: "Language",
     theme: "Theme",
     light: "Light",

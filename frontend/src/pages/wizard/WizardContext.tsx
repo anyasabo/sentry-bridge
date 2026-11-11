@@ -5,8 +5,11 @@ export interface WizardData {
   rtspUrl: string;
   username: string;
   password: string;
+  /** Masked hint of the stored password; an empty password means "keep it". */
+  passwordHint: string;
   obicoServerUrl: string;
-  obicoApiKey: string;
+  /** Masked hint of the stored API key; set when the printer is already paired. */
+  obicoApiKeyHint: string;
 }
 
 interface WizardContextValue {
@@ -24,8 +27,9 @@ const EMPTY: WizardData = {
   rtspUrl: "",
   username: "maker",
   password: "",
+  passwordHint: "",
   obicoServerUrl: "",
-  obicoApiKey: "",
+  obicoApiKeyHint: "",
 };
 
 export function WizardProvider({ children }: { children: React.ReactNode }) {
@@ -42,9 +46,10 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
           printerIp: cfg.prusalink?.url?.replace(/^https?:\/\//, "") ?? "",
           rtspUrl: cfg.camera?.rtspUrl ?? "",
           username: cfg.prusalink?.username ?? "maker",
-          password: cfg.prusalink?.password ?? "",
+          password: "",
+          passwordHint: cfg.prusalink?.passwordHint ?? "",
           obicoServerUrl: cfg.obico?.serverUrl ?? "",
-          obicoApiKey: cfg.obico?.apiKey ?? "",
+          obicoApiKeyHint: cfg.obico?.apiKeyHint ?? "",
         });
       })
       .catch(() => {});

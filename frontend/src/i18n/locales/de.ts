@@ -151,6 +151,8 @@ export default {
     },
   },
   common: {
+    secret_keep_hint:
+      "Ein Wert ist gespeichert (maskiert angezeigt). Leer lassen, um ihn zu behalten.",
     language: "Sprache",
     theme: "Design",
     light: "Hell",

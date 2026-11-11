@@ -14,12 +14,11 @@ sequenceDiagram
     participant Bridge as SentryBridge
     participant Obico as Obico Server
 
-    UI->>Bridge: POST /api/wizard/verify-pairing {obicoServerUrl, code}
+    UI->>Bridge: POST /api/wizard/verify-pairing {setup, obicoServerUrl, code}
     Bridge->>Obico: POST /api/v1/octo/verify/?code=<code>
     Obico-->>Bridge: 200 { printer: { auth_token, id, name } }
-    Bridge-->>UI: 200 { apiKey, serverUrl }
-    UI->>Bridge: POST /api/setup/save (full config incl. apiKey)
-    Bridge->>Bridge: saveConfig() → emit configChanged
+    Bridge->>Bridge: saveConfig() with auth_token as apiKey → emit configChanged
+    Bridge-->>UI: 200 { ok, serverUrl } (no apiKey)
     Bridge->>Obico: WebSocket connect wss://{server}/ws/dev/ (Authorization: bearer {auth_token})
     Obico-->>Bridge: WebSocket established
     Bridge->>Obico: Send printer_info { type: "moonraker_obico", version: "2.1.0" }
