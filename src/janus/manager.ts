@@ -12,6 +12,7 @@ import {
 } from "../lib/env-config";
 import { healthMonitor } from "../lib/health";
 import { HealthState, ErrorSeverity } from "../lib/health-monitor";
+import { patchJanusConfig } from "./jcfg";
 
 const JANUS_WS_PORT = 8188;
 
@@ -101,20 +102,17 @@ export function createJanusManager(): JanusManager {
       }
     }
 
-    // Patch nat_1_1_mapping with the host LAN IP so Janus advertises a reachable
-    // ICE candidate. Without this, Janus defaults to 127.0.0.1 which is unreachable
-    // from the Obico server / browser outside the container.
-    const hostIp = process.env.JANUS_HOST_IP?.trim();
-    if (hostIp) {
-      const jcfgPath = path.join(dir, "janus.jcfg");
-      if (fs.existsSync(jcfgPath)) {
-        const original = fs.readFileSync(jcfgPath, "utf8");
-        const patched = original.replace(
-          /nat_1_1_mapping\s*=\s*"[^"]*"/,
-          `nat_1_1_mapping = "${hostIp}"`
-        );
-        fs.writeFileSync(jcfgPath, patched, "utf8");
-        console.log(`[janus] nat_1_1_mapping set to ${hostIp}`);
+    const jcfgPath = path.join(dir, "janus.jcfg");
+    const hasOverrides =
+      !!process.env.JANUS_HOST_IP?.trim() ||
+      !!process.env.JANUS_RTP_PORT_RANGE?.trim();
+    if (hasOverrides && fs.existsSync(jcfgPath)) {
+      const original = fs.readFileSync(jcfgPath, "utf8");
+      const { text, warnings } = patchJanusConfig(original, process.env);
+      for (const w of warnings) console.warn(`[janus] ${w}`);
+      if (text !== original) {
+        fs.writeFileSync(jcfgPath, text, "utf8");
+        console.log("[janus] janus.jcfg patched from environment");
       }
     }
 

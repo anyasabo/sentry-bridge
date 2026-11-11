@@ -94,22 +94,67 @@ docker compose up -d
 
 The repo includes a ready-to-use [`docker-compose.yml`](./docker-compose.yml) — just clone and run.
 
+## Multiple printers
+
+One SentryBridge container serves exactly one printer. For several printers, run one container per printer. Each container needs its own:
+
+- `container_name`
+- host web port (the container side stays `3000`)
+- config volume (`./config-<name>`)
+- Janus UDP range via `JANUS_RTP_PORT_RANGE`, published with **the same numbers on host and container side** (`10300-10400:10300-10400/udp`). Remapping such as `10300-10400:10100-10200/udp` does not work, because Janus advertises its container-internal ports to the browser.
+
+`JANUS_HOST_IP` is the same for all containers (the Docker host's LAN IP). The Janus-internal ports `8188` (WebSocket) and `17732/udp` (RTP from ffmpeg) stay inside each container and need no change.
+
+```yaml
+services:
+  bridge-core-one:
+    image: rleban/sentry-bridge:latest
+    container_name: sentry-bridge-core-one
+    ports:
+      - "3000:3000"
+      - "10100-10200:10100-10200/udp"
+    volumes:
+      - ./config-core-one:/config
+    environment:
+      - JANUS_HOST_IP=${JANUS_HOST_IP:-}
+      - JANUS_RTP_PORT_RANGE=10100-10200
+    restart: unless-stopped
+
+  bridge-core-one-l:
+    image: rleban/sentry-bridge:latest
+    container_name: sentry-bridge-core-one-l
+    ports:
+      - "3001:3000"
+      - "10300-10400:10300-10400/udp"
+    volumes:
+      - ./config-core-one-l:/config
+    environment:
+      - JANUS_HOST_IP=${JANUS_HOST_IP:-}
+      - JANUS_RTP_PORT_RANGE=10300-10400
+    restart: unless-stopped
+```
+
+Open `http://<host>:3000` and `http://<host>:3001` and run the Setup Wizard once per printer.
+
+Footprint per container (measured): about 210 MB RAM and about a third of one CPU core, mostly ffmpeg for the camera. The image (~625 MB) is stored once on disk and shared by all containers.
+
 ## Configuration
 
 ### Environment Variables
 
-| Variable                           | Default               | Required / Optional       | Description                                                                                                                                                     |
-| ---------------------------------- | --------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                             | `3000`                | Optional                  | HTTP port                                                                                                                                                       |
-| `CONFIG_PATH`                      | `/config/config.json` | Optional                  | Config file path                                                                                                                                                |
-| `JANUS_HOST_IP`                    | _(unset)_             | **Required** (for WebRTC) | LAN IP of the Docker host. Janus advertises this as its ICE candidate so the browser can reach it. Without this, the live stream falls back to MJPEG snapshots. |
-| `JANUS_MODE`                       | `auto`                | Optional                  | `bundled` — bridge manages Janus binary; `hosted` — external/sidecar; `auto` — detect                                                                           |
-| `JANUS_DEBUG_LEVEL`                | `2`                   | Optional                  | Janus log verbosity: 0=Fatal 1=Err 2=Warn 3=Info 4=Verbose 5=Huge                                                                                               |
-| `CIRCUIT_BREAKER_THRESHOLD`        | `5`                   | Optional                  | Consecutive PrusaLink failures before circuit opens                                                                                                             |
-| `CIRCUIT_BREAKER_RESET_TIMEOUT_MS` | `60000`               | Optional                  | Time (ms) before retrying after circuit opens                                                                                                                   |
-| `RETRY_BASE_DELAY_MS`              | `1000`                | Optional                  | Initial retry delay (ms)                                                                                                                                        |
-| `RETRY_MAX_DELAY_MS`               | `30000`               | Optional                  | Maximum retry delay (ms)                                                                                                                                        |
-| `HEALTHCHECK_CRITICAL_TIMEOUT_MS`  | `120000`              | Optional                  | Time (ms) a critical component can stay DOWN before `/api/health/ready` returns 503                                                                             |
+| Variable                           | Default               | Required / Optional       | Description                                                                                                                                                                |
+| ---------------------------------- | --------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                             | `3000`                | Optional                  | HTTP port                                                                                                                                                                  |
+| `CONFIG_PATH`                      | `/config/config.json` | Optional                  | Config file path                                                                                                                                                           |
+| `JANUS_HOST_IP`                    | _(unset)_             | **Required** (for WebRTC) | LAN IP of the Docker host. Janus advertises this as its ICE candidate so the browser can reach it. Without this, the live stream falls back to MJPEG snapshots.            |
+| `JANUS_RTP_PORT_RANGE`             | `10100-10200`         | Optional                  | UDP range for Janus WebRTC media (`MIN-MAX`, 1024–65535). Publish it with host port = container port. Use a distinct range per container when running several on one host. |
+| `JANUS_MODE`                       | `auto`                | Optional                  | `bundled` — bridge manages Janus binary; `hosted` — external/sidecar; `auto` — detect                                                                                      |
+| `JANUS_DEBUG_LEVEL`                | `2`                   | Optional                  | Janus log verbosity: 0=Fatal 1=Err 2=Warn 3=Info 4=Verbose 5=Huge                                                                                                          |
+| `CIRCUIT_BREAKER_THRESHOLD`        | `5`                   | Optional                  | Consecutive PrusaLink failures before circuit opens                                                                                                                        |
+| `CIRCUIT_BREAKER_RESET_TIMEOUT_MS` | `60000`               | Optional                  | Time (ms) before retrying after circuit opens                                                                                                                              |
+| `RETRY_BASE_DELAY_MS`              | `1000`                | Optional                  | Initial retry delay (ms)                                                                                                                                                   |
+| `RETRY_MAX_DELAY_MS`               | `30000`               | Optional                  | Maximum retry delay (ms)                                                                                                                                                   |
+| `HEALTHCHECK_CRITICAL_TIMEOUT_MS`  | `120000`              | Optional                  | Time (ms) a critical component can stay DOWN before `/api/health/ready` returns 503                                                                                        |
 
 ### config.json
 

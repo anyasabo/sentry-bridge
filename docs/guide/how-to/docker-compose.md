@@ -134,12 +134,58 @@ The `./config` volume directory persists — your `config.json` is not deleted.
 
 ---
 
+## Multiple printers
+
+One SentryBridge container serves exactly one printer. For several printers, run one container per printer. Each container needs its own:
+
+- `container_name`
+- host web port (the container side stays `3000`)
+- config volume (`./config-<name>`)
+- Janus UDP range via `JANUS_RTP_PORT_RANGE`, published with **the same numbers on host and container side** (`10300-10400:10300-10400/udp`). Remapping such as `10300-10400:10100-10200/udp` does not work, because Janus advertises its container-internal ports to the browser.
+
+`JANUS_HOST_IP` is the same for all containers (the Docker host's LAN IP). The Janus-internal ports `8188` (WebSocket) and `17732/udp` (RTP from ffmpeg) stay inside each container and need no change.
+
+```yaml
+services:
+  bridge-core-one:
+    image: rleban/sentry-bridge:latest
+    container_name: sentry-bridge-core-one
+    ports:
+      - "3000:3000"
+      - "10100-10200:10100-10200/udp"
+    volumes:
+      - ./config-core-one:/config
+    environment:
+      - JANUS_HOST_IP=${JANUS_HOST_IP:-}
+      - JANUS_RTP_PORT_RANGE=10100-10200
+    restart: unless-stopped
+
+  bridge-core-one-l:
+    image: rleban/sentry-bridge:latest
+    container_name: sentry-bridge-core-one-l
+    ports:
+      - "3001:3000"
+      - "10300-10400:10300-10400/udp"
+    volumes:
+      - ./config-core-one-l:/config
+    environment:
+      - JANUS_HOST_IP=${JANUS_HOST_IP:-}
+      - JANUS_RTP_PORT_RANGE=10300-10400
+    restart: unless-stopped
+```
+
+Open `http://<host>:3000` and `http://<host>:3001` and run the Setup Wizard once per printer.
+
+Footprint per container (measured): about 210 MB RAM and about a third of one CPU core, mostly ffmpeg for the camera. The image (~625 MB) is stored once on disk and shared by all containers.
+
+---
+
 ## Port reference
 
-| Port        | Protocol | Purpose                                  |
-| ----------- | -------- | ---------------------------------------- |
-| 3000        | TCP      | SentryBridge Web UI and REST API         |
-| 10100–10200 | UDP      | Janus WebRTC ICE media (browser ↔ Janus) |
+| Port        | Protocol | Purpose                                                                  |
+| ----------- | -------- | ------------------------------------------------------------------------ |
+| 3000        | TCP      | SentryBridge Web UI and REST API                                         |
+| 10100–10200 | UDP      | Janus WebRTC ICE media (browser ↔ Janus); set via `JANUS_RTP_PORT_RANGE` |
 
 If port 3000 is in use on your host, change the left side of `"${PORT:-3000}:3000"` and set `PORT=<new-port>` in `.env`.
 
