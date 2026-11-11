@@ -1,42 +1,37 @@
 version: 2
+
+# One monthly PR for all ecosystems (root npm, frontend npm, GitHub Actions).
+multi-ecosystem-groups:
+  all:
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+
 updates:
   - package-ecosystem: "npm"
     directory: "/"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
+    multi-ecosystem-group: "all"
+    patterns: ["*"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
       # TypeScript 7 conflicts with peer ranges of ts-jest / react-i18next — see #58
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
-    groups:
-      all-dependencies:
-        patterns: ["*"]
 
   - package-ecosystem: "npm"
     directory: "/frontend"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
+    multi-ecosystem-group: "all"
+    patterns: ["*"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
       # TypeScript 7 conflicts with peer ranges of ts-jest / react-i18next — see #58
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
-    groups:
-      all-dependencies:
-        patterns: ["*"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "dependencies"
+    multi-ecosystem-group: "all"
+    patterns: ["*"]
