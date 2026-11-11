@@ -42,6 +42,7 @@ describe("stopBridge()", () => {
     const order: string[] = [];
 
     const mockCamera = {
+      stopRtpStream: jest.fn(),
       stopGracefully: jest
         .fn()
         .mockImplementation(async () => order.push("camera")),
@@ -85,6 +86,7 @@ describe("stopBridge()", () => {
 
   it("stopBridge is idempotent — second call is a no-op", async () => {
     const mockCamera = {
+      stopRtpStream: jest.fn(),
       stopGracefully: jest.fn().mockResolvedValue(undefined),
     };
     const mockAgent = {
@@ -112,6 +114,7 @@ describe("stopBridge()", () => {
 
   it("reads ffmpegKillTimeoutSeconds from config when provided", async () => {
     const mockCamera = {
+      stopRtpStream: jest.fn(),
       stopGracefully: jest.fn().mockResolvedValue(undefined),
     };
 

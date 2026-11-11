@@ -8,7 +8,9 @@ jest.mock("../bridge", () => ({
 }));
 
 import { reconnectComponent } from "../bridge";
-const mockReconnect = reconnectComponent as jest.MockedFunction<typeof reconnectComponent>;
+const mockReconnect = reconnectComponent as jest.MockedFunction<
+  typeof reconnectComponent
+>;
 
 describe("POST /api/bridge/reconnect", () => {
   beforeEach(() => {
@@ -60,25 +62,21 @@ describe("POST /api/bridge/reconnect", () => {
 
 import { circuitBreakerRegistry } from "../lib/health";
 import { createObicoAgent } from "../obico/agent";
-import { createCamera } from "../camera/camera";
 import { createPrusaLinkClient } from "../prusalink/client";
 
-describe("circuitBreakerRegistry — all three components registered", () => {
+describe("circuitBreakerRegistry — registration on creation", () => {
   beforeEach(() => {
     circuitBreakerRegistry.delete("prusalink");
     circuitBreakerRegistry.delete("obico_ws");
-    circuitBreakerRegistry.delete("camera");
   });
 
-  it("all three components register their CB when created", () => {
+  // The camera registers when its stream starts, not on creation, so a
+  // one-off camera cannot replace it (see camera.test.ts).
+  it("prusalink and obico_ws register their CB when created", () => {
     createPrusaLinkClient({
       baseUrl: "http://localhost:1",
       username: "u",
       password: "p",
-    });
-    createCamera({
-      rtspUrl: "rtsp://127.0.0.1:1/none",
-      frameIntervalSeconds: 2,
     });
     createObicoAgent(
       {
@@ -92,6 +90,5 @@ describe("circuitBreakerRegistry — all three components registered", () => {
 
     expect(circuitBreakerRegistry.get("prusalink")).toBeDefined();
     expect(circuitBreakerRegistry.get("obico_ws")).toBeDefined();
-    expect(circuitBreakerRegistry.get("camera")).toBeDefined();
   });
 });

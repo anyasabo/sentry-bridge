@@ -1,8 +1,10 @@
 import { EventEmitter } from "events";
 import { createCamera, formatFfmpegLog } from "../camera/camera";
 import { CameraConfig } from "../camera/types";
-import { healthMonitor } from "../lib/health";
+import { healthMonitor, circuitBreakerRegistry } from "../lib/health";
 import { ErrorSeverity, HealthState } from "../lib/health-monitor";
+import * as circuitBreakerModule from "../lib/circuit-breaker";
+import { CircuitState } from "../lib/circuit-breaker";
 
 jest.mock("child_process");
 import * as cp from "child_process";
@@ -54,9 +56,10 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-// Also restores real timers when a test fails before reaching its end.
+// Also restores real timers and spies when a test fails before its end.
 afterEach(() => {
   jest.useRealTimers();
+  jest.restoreAllMocks();
 });
 
 describe("Camera", () => {
@@ -127,26 +130,86 @@ describe("Camera", () => {
   describe("circuit breaker registration", () => {
     beforeEach(() => {
       // Ensure clean registry state
-      const { circuitBreakerRegistry } = require("../lib/health");
       circuitBreakerRegistry.delete("camera");
     });
 
-    it("registers a circuit breaker under 'camera' when the camera is created", () => {
-      const { circuitBreakerRegistry } = require("../lib/health");
-      const { CircuitState } = require("../lib/circuit-breaker");
-      createCamera(config);
+    it("registers its circuit breaker under 'camera' once the stream starts", () => {
+      mockSpawn.mockReturnValue(makeMockProcess({}));
+      const camera = createCamera(config);
+      camera.start();
       const cb = circuitBreakerRegistry.get("camera");
       expect(cb).toBeDefined();
       expect(cb!.state).toBe(CircuitState.CLOSED);
+      camera.stop();
     });
 
     it("allows reset() on the registered breaker to leave state CLOSED", () => {
-      const { circuitBreakerRegistry } = require("../lib/health");
-      const { CircuitState } = require("../lib/circuit-breaker");
-      createCamera(config);
+      mockSpawn.mockReturnValue(makeMockProcess({}));
+      const camera = createCamera(config);
+      camera.start();
       const cb = circuitBreakerRegistry.get("camera")!;
       cb.reset();
       expect(cb.state).toBe(CircuitState.CLOSED);
+      camera.stop();
+    });
+
+    it("leaves the running stream's breaker alone when a one-off camera is created", async () => {
+      mockSpawn.mockReturnValue(makeMockProcess({}));
+      const streaming = createCamera(config);
+      streaming.start();
+      const streamingCb = circuitBreakerRegistry.get("camera");
+
+      mockSpawn.mockReturnValue(
+        makeMockProcess({ stdoutData: [fakeJpeg], exitCode: 0 })
+      );
+      await createCamera(config).testStream();
+
+      expect(circuitBreakerRegistry.get("camera")).toBe(streamingCb);
+      streaming.stop();
+    });
+  });
+
+  describe("latestFrame()", () => {
+    it("returns null before the stream delivered a frame", () => {
+      mockSpawn.mockReturnValue(makeMockProcess({}));
+      const camera = createCamera(config);
+      camera.start();
+      expect(camera.latestFrame(15_000)).toBeNull();
+      camera.stop();
+    });
+
+    it("returns the last frame of the running stream", () => {
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+      proc.stdout!.emit("data", fakeJpeg);
+      expect(camera.latestFrame(15_000)).toEqual(fakeJpeg);
+      camera.stop();
+    });
+
+    it("returns null once the last frame is older than maxAgeMs", () => {
+      jest.useFakeTimers();
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+      proc.stdout!.emit("data", fakeJpeg);
+      jest.advanceTimersByTime(9_000);
+      expect(camera.latestFrame(10_000)).toEqual(fakeJpeg);
+      jest.advanceTimersByTime(2_000);
+      expect(camera.latestFrame(10_000)).toBeNull();
+      camera.stop();
+    });
+
+    it("returns null after stop()", () => {
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+      proc.stdout!.emit("data", fakeJpeg);
+      camera.stop();
+      expect(camera.latestFrame(15_000)).toBeNull();
     });
   });
 
@@ -243,6 +306,22 @@ describe("Camera", () => {
       expect(proc.kill).toHaveBeenCalledTimes(1);
       jest.advanceTimersByTime(5_000);
       expect(proc.kill).toHaveBeenLastCalledWith("SIGKILL");
+
+      camera.stopRtpStream();
+    });
+
+    it("keeps an RTP ffmpeg alive while it reports progress on stdout", () => {
+      jest.useFakeTimers();
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.startRtpStream(5004);
+
+      for (let i = 0; i < 6; i++) {
+        jest.advanceTimersByTime(10_000);
+        proc.stdout!.emit("data", Buffer.from("progress=continue\n"));
+      }
+      expect(proc.kill).not.toHaveBeenCalled();
 
       camera.stopRtpStream();
     });
@@ -398,6 +477,95 @@ describe("Camera", () => {
       expect(logged).not.toContain("ssw0rd");
     });
 
+    it("delivers frames again on its own after the circuit breaker opened", async () => {
+      jest.useFakeTimers();
+      jest.spyOn(console, "log").mockImplementation(() => {});
+      jest.spyOn(console, "warn").mockImplementation(() => {});
+      const procs: cp.ChildProcess[] = [];
+      mockSpawn.mockImplementation(() => {
+        const p = makeMockProcess({});
+        procs.push(p);
+        return p;
+      });
+      const onFrame = jest.fn();
+      const camera = createCamera(config);
+      camera.onFrame(onFrame);
+      camera.start();
+
+      // RTSP unreachable: every ffmpeg exits before its first frame until the
+      // breaker (threshold 5) opens and refuses further spawns.
+      const breaker = circuitBreakerRegistry.get("camera")!;
+      for (let i = 0; i < 20 && breaker.state !== CircuitState.OPEN; i++) {
+        procs[procs.length - 1].emit("close", 1);
+        await jest.advanceTimersByTimeAsync(30_000);
+      }
+      expect(breaker.state).toBe(CircuitState.OPEN);
+      const spawnsWhileOpen = procs.length;
+
+      // RTSP is back: once the breaker lets a probe through, ffmpeg is
+      // spawned again and its frame gets through.
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(procs.length).toBe(spawnsWhileOpen + 1);
+      procs[procs.length - 1].stdout!.emit("data", fakeJpeg);
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(breaker.state).toBe(CircuitState.CLOSED);
+      expect(onFrame).toHaveBeenCalledTimes(1);
+      expect(healthMonitor.getComponentStats("camera").state).toBe(
+        HealthState.HEALTHY
+      );
+      camera.stop();
+    });
+
+    it("does not retry in a tight loop while the breaker still refuses", async () => {
+      jest.useFakeTimers();
+      jest.spyOn(console, "log").mockImplementation(() => {});
+      // A breaker that claims to be due for HALF_OPEN but keeps refusing, as
+      // when the retry timer fires just before the breaker's own reset timer.
+      const execute = jest
+        .fn()
+        .mockRejectedValue(new Error("Circuit breaker is OPEN"));
+      jest.spyOn(circuitBreakerModule, "createCircuitBreaker").mockReturnValue({
+        state: CircuitState.OPEN,
+        stats: {
+          state: CircuitState.OPEN,
+          failureCount: 5,
+          totalFailures: 5,
+          totalSuccesses: 0,
+          openedAt: 0,
+          timeUntilHalfOpenMs: 0,
+        },
+        execute,
+        reset: jest.fn(),
+      });
+      const camera = createCamera(config);
+      camera.start();
+
+      await jest.advanceTimersByTimeAsync(1_000);
+      expect(execute.mock.calls.length).toBeLessThanOrEqual(2);
+      camera.stop();
+    });
+
+    it("reports a MJPEG ffmpeg that fails to spawn instead of crashing", () => {
+      const pushError = jest.spyOn(healthMonitor, "pushError");
+      jest.spyOn(console, "error").mockImplementation(() => {});
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      camera.start();
+
+      expect(() =>
+        proc.emit("error", new Error("spawn ffmpeg ENOENT"))
+      ).not.toThrow();
+      expect(pushError).toHaveBeenCalledWith(
+        "camera",
+        expect.stringContaining("ENOENT"),
+        ErrorSeverity.ERROR
+      );
+
+      camera.stop();
+    });
+
     it("does not crash if stop() is called before start()", () => {
       const camera = createCamera(config);
       expect(() => camera.stop()).not.toThrow();
@@ -420,7 +588,7 @@ describe("Camera", () => {
       ).toBe("Opening 'rtsp://***@10.0.0.1/live'");
     });
 
-    it("quiets the MJPEG ffmpeg but leaves RTP stats on", () => {
+    it("quiets both ffmpeg processes and reads RTP liveness from -progress", () => {
       mockSpawn.mockImplementation(() => makeMockProcess({}));
       const camera = createCamera(config);
       camera.start();
@@ -434,8 +602,14 @@ describe("Camera", () => {
         "-loglevel",
         "warning",
       ]);
-      expect(rtpArgs).not.toContain("-nostats");
-      expect(rtpArgs).not.toContain("-loglevel");
+      expect(rtpArgs.slice(0, 6)).toEqual([
+        "-hide_banner",
+        "-nostats",
+        "-loglevel",
+        "warning",
+        "-progress",
+        "pipe:1",
+      ]);
       camera.stop();
       camera.stopRtpStream();
     });

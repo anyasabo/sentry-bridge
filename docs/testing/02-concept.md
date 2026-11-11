@@ -87,7 +87,13 @@ Each test file is co-located with the module in `src/__tests__/` and follows the
 - Verifies ffmpeg kill, WebSocket close, HTTP server close — in correct order.
 - `hardTimeout.unref()` is verified not to block the Jest process.
 
-### 2.4 Files API Routes (`src/__tests__/files-routes.test.ts`)
+### 2.4 Janus Recovery (`src/__tests__/bridge-janus-recovery.test.ts`)
+
+- Each test loads a fresh bridge module (`jest.resetModules()`), since `startBridge()` runs once per module load.
+- The Janus manager mock captures the `onAvailable` handler; tests fire it to simulate a Janus that comes up after a failed first start.
+- Verifies RTP stream (`JANUS_RTP_PORT`) and relay start, a single handler across reconnects, and that no RTP stream or relay starts once shutdown has begun.
+
+### 2.5 Files API Routes (`src/__tests__/files-routes.test.ts`)
 
 - Uses Supertest to send HTTP requests to the Express router.
 - Mocks `createPrusaLinkClient` to avoid real PrusaLink calls.
@@ -100,13 +106,13 @@ Each test file is co-located with the module in `src/__tests__/` and follows the
 
 ### 3.1 Environment
 
-| Component | Details |
-|-----------|---------|
-| Printer | Prusa Core One, Buddy board, PrusaLink enabled |
-| Camera | Buddy3D integrated camera, RTSP at `rtsp://[ip]/live` |
-| Obico | Self-hosted Obico server (Docker, LAN) |
-| Bridge | Built from source, `npm run build:all && npm run start:backend` |
-| Network | LAN only, no external internet required |
+| Component | Details                                                         |
+| --------- | --------------------------------------------------------------- |
+| Printer   | Prusa Core One, Buddy board, PrusaLink enabled                  |
+| Camera    | Buddy3D integrated camera, RTSP at `rtsp://[ip]/live`           |
+| Obico     | Self-hosted Obico server (Docker, LAN)                          |
+| Bridge    | Built from source, `npm run build:all && npm run start:backend` |
+| Network   | LAN only, no external internet required                         |
 
 ### 3.2 UAT Execution Checklist
 
@@ -128,6 +134,7 @@ All 10 scenarios were passing for v1.1.0 release.
 ### 3.3 Regression Strategy
 
 After any code change affecting:
+
 - Obico agent passthru — re-run UAT steps 3-6, 10
 - PrusaLink client — re-run UAT steps 3-9
 - Camera module — re-run UAT step 2
@@ -138,13 +145,13 @@ After any code change affecting:
 
 ## 4. Test Data
 
-| Module | Test Data |
-|--------|-----------|
-| Config | Inline JSON fixtures in test files; no external files |
-| PrusaLink | Mocked API responses derived from `docs/background/prusalink-api.md` |
-| Obico Agent | Mocked WebSocket messages derived from `docs/background/obico-agent-protocol.md` |
-| Files API | Test G-code file: `test.gcode` (minimal 10-line file for upload tests) |
-| Hardware-UAT | Real G-code files from Prusa Slicer (benchy_0.2mm_PETG.gcode) |
+| Module       | Test Data                                                                        |
+| ------------ | -------------------------------------------------------------------------------- |
+| Config       | Inline JSON fixtures in test files; no external files                            |
+| PrusaLink    | Mocked API responses derived from `docs/background/prusalink-api.md`             |
+| Obico Agent  | Mocked WebSocket messages derived from `docs/background/obico-agent-protocol.md` |
+| Files API    | Test G-code file: `test.gcode` (minimal 10-line file for upload tests)           |
+| Hardware-UAT | Real G-code files from Prusa Slicer (benchy_0.2mm_PETG.gcode)                    |
 
 ---
 

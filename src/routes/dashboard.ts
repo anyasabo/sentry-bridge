@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { loadConfig, saveConfig, Config } from "../config/config";
 import { createPrusaLinkClient } from "../prusalink/client";
 import { createCamera } from "../camera/camera";
+import { getCameraInstance } from "../camera/registry";
 import { startBridge } from "../bridge";
 import { healthMonitor, janusMode } from "../lib/health";
 import { HealthState } from "../lib/health-monitor";
@@ -131,8 +132,18 @@ router.get("/printer/info", async (_req: Request, res: Response) => {
 
 // ── Camera snapshot: /api/camera/snapshot ─────────────────────────────────
 
+// The running stream delivers several frames a second; older than this means
+// it is stalled or reconnecting.
+const SNAPSHOT_MAX_AGE_MS = 15_000;
+
 router.get("/camera/snapshot", async (_req: Request, res: Response) => {
   try {
+    const live = getCameraInstance()?.latestFrame(SNAPSHOT_MAX_AGE_MS);
+    if (live) {
+      res.setHeader("Content-Type", "image/jpeg");
+      res.send(live);
+      return;
+    }
     const config = loadConfig();
     const camera = createCamera({
       rtspUrl: config.camera.rtspUrl,

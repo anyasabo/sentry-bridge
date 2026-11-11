@@ -67,6 +67,7 @@ export function createCamera(config: CameraConfig): CameraModule {
   const MJPEG_WATCHDOG_MS = 10_000;
   // RTSP connect plus first decoded frame can take well over the frame gap.
   const MJPEG_FIRST_FRAME_MS = 30_000;
+  const MJPEG_OPEN_RETRY_MARGIN_MS = 1_000;
 
   let rtpStopped = false;
   let rtpRestartAttempt = 0;
@@ -77,10 +78,16 @@ export function createCamera(config: CameraConfig): CameraModule {
   let rtpWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
   const RTP_WATCHDOG_MS = 30_000;
 
+  // Registered on start(): a camera used only for testStream() must not
+  // replace the running stream's breaker in the health view.
   const cb = createCircuitBreaker(resilienceConfig.circuitBreaker);
-  circuitBreakerRegistry.set("camera", cb);
+
+  let lastFrame: Buffer | null = null;
+  let lastFrameAt = 0;
 
   function emitFrame(frame: Buffer): void {
+    lastFrame = frame;
+    lastFrameAt = Date.now();
     if (frameCallback) frameCallback(frame);
     for (const cb of subscribers.values()) cb(frame);
   }
@@ -123,9 +130,11 @@ export function createCamera(config: CameraConfig): CameraModule {
 
   function spawnMjpeg(): void {
     const gen = ++mjpegGeneration;
+    let spawned = false;
     cb.execute(
       () =>
         new Promise<void>((resolve, reject) => {
+          spawned = true;
           proc = spawnFfmpeg([
             "-hide_banner",
             "-nostats",
@@ -144,6 +153,14 @@ export function createCamera(config: CameraConfig): CameraModule {
             "pipe:1",
           ]);
           mjpegStderr = trackStderrTail(proc);
+          // Without a listener, a spawn failure (e.g. ENOENT) crashes the
+          // process. The `close` that follows schedules the restart.
+          proc.on("error", (err) => {
+            if (gen !== mjpegGeneration) return;
+            const msg = `MJPEG ffmpeg error: ${err.message}`;
+            console.error(`[camera] ${msg}`);
+            healthMonitor.pushError("camera", msg, ErrorSeverity.ERROR);
+          });
           // Armed before the first frame too: ffmpeg can hang while connecting.
           resetMjpegWatchdog(MJPEG_FIRST_FRAME_MS);
 
@@ -204,8 +221,14 @@ export function createCamera(config: CameraConfig): CameraModule {
           });
         })
     ).catch(() => {
-      // CB opened or connect failed — restart scheduling is already handled
-      // by the `close` handler above. Swallow to prevent unhandled rejection.
+      // A failed connect already scheduled its restart in the `close` handler.
+      if (spawned || mjpegStopped || gen !== mjpegGeneration) return;
+      // The breaker is OPEN and refused the spawn: retry once it should let a
+      // probe through. The margin keeps the retry clear of the breaker's own
+      // timing and bounds the retry rate if the breaker still refuses.
+      const delay =
+        (cb.stats.timeUntilHalfOpenMs ?? 0) + MJPEG_OPEN_RETRY_MARGIN_MS;
+      mjpegRestartTimer = setTimeout(() => spawnMjpeg(), delay);
     });
   }
 
@@ -227,6 +250,13 @@ export function createCamera(config: CameraConfig): CameraModule {
   function spawnRtp(port: number, isRestart = false): void {
     const gen = ++rtpGeneration;
     rtpProc = spawnFfmpeg([
+      "-hide_banner",
+      "-nostats",
+      "-loglevel",
+      "warning",
+      // Progress reports on stdout every 0.5 s are the watchdog's sign of life.
+      "-progress",
+      "pipe:1",
       "-rtsp_transport",
       "tcp",
       "-i",
@@ -254,11 +284,13 @@ export function createCamera(config: CameraConfig): CameraModule {
       "rtp",
       `rtp://127.0.0.1:${port}?pkt_size=1300`,
     ]);
-    rtpProc.stdout!.on("data", discard);
+    rtpProc.stdout!.on("data", () => {
+      if (gen !== rtpGeneration) return;
+      resetRtpWatchdog(gen);
+    });
     rtpProc.stderr!.on("data", (d: Buffer) => {
       if (gen !== rtpGeneration) return;
       process.stderr.write(`[camera/rtp] ${formatFfmpegLog(String(d))}`);
-      resetRtpWatchdog(gen);
     });
     rtpProc.on("close", (code) => {
       if (gen !== rtpGeneration) return; // stale close event from a superseded process
@@ -291,6 +323,7 @@ export function createCamera(config: CameraConfig): CameraModule {
 
     start(): void {
       if (proc) return;
+      circuitBreakerRegistry.set("camera", cb);
       mjpegStopped = false;
       mjpegRestartAttempt = 0;
       spawnMjpeg();
@@ -310,6 +343,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         terminate(proc);
         proc = null;
       }
+      lastFrame = null;
       healthMonitor.setState("camera", HealthState.DOWN);
     },
 
@@ -323,6 +357,7 @@ export function createCamera(config: CameraConfig): CameraModule {
         clearTimeout(mjpegWatchdogTimer);
         mjpegWatchdogTimer = null;
       }
+      lastFrame = null;
       healthMonitor.setState("camera", HealthState.DOWN);
       const p = proc;
       proc = null;
@@ -387,6 +422,11 @@ export function createCamera(config: CameraConfig): CameraModule {
         rtpProc = null;
       }
       healthMonitor.setState("rtp_stream", HealthState.DOWN);
+    },
+
+    latestFrame(maxAgeMs: number): Buffer | null {
+      if (!lastFrame || Date.now() - lastFrameAt > maxAgeMs) return null;
+      return lastFrame;
     },
 
     testStream(timeoutMs = 10_000): Promise<Buffer> {

@@ -45,6 +45,8 @@ The bridge ships Janus inside its Docker image (`janus-gateway` Alpine package) 
 
 Reasoning: bundled gives the user a one-`docker run` setup without sacrificing the option for advanced users to run their own Janus. The relay isolates the media path from the agent protocol — the WebSocket carrying status/frames stays separate from the Janus signalling channel.
 
+`start()` resolves `true` when Janus is ready in time. Every later availability is signalled through the manager's `onAvailable` callback instead: after a bundled restart, after a hosted Janus recovers, and when a bundled or hosted Janus first answers after `start()` gave up. The bridge then (re)starts the RTP stream and relay. In `auto` mode with neither a reachable Janus nor a local binary, the mode stays `unavailable` and nothing is watched.
+
 The `JANUS_HOST_IP` env var is required when WebRTC is in use; without it, Janus cannot advertise a reachable ICE candidate to the browser. This is documented in the README and produces a graceful fallback (MJPEG only) when unset.
 
 ## Consequences

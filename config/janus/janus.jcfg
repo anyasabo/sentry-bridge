@@ -23,3 +23,9 @@ plugins: {
 transports: {
 	disable = "libjanus_http.so,libjanus_pfunix.so,libjanus_rabbitmq.so"
 }
+
+# The JSON logger has no config of its own and is not used; loading it only
+# logs a missing-file error on every start.
+loggers: {
+	disable = "libjanus_jsonlog.so"
+}

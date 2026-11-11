@@ -12,6 +12,8 @@ export interface CameraModule {
   subscribe(id: symbol, callback: (frame: Buffer) => void): void;
   unsubscribe(id: symbol): void;
   testStream(timeoutMs?: number): Promise<Buffer>;
+  /** Last frame of the running stream, or null if none is newer than maxAgeMs. */
+  latestFrame(maxAgeMs: number): Buffer | null;
   /** Start a parallel H.264 RTP stream to 127.0.0.1:{port} for Janus. */
   startRtpStream(port: number): void;
   stopRtpStream(): void;

@@ -108,7 +108,12 @@ export async function stopBridge(server: import("http").Server): Promise<void> {
       console.error("[shutdown] agent:", e);
     }
 
-    // 3. Camera / ffmpeg — SIGINT → SIGKILL
+    // 3. Camera / ffmpeg — RTP stream, then MJPEG via SIGINT → SIGKILL
+    try {
+      state.camera?.stopRtpStream();
+    } catch (e) {
+      console.error("[shutdown] rtp stream:", e);
+    }
     try {
       await state.camera?.stopGracefully(timeoutSec * 1000);
     } catch (e) {
@@ -381,6 +386,8 @@ async function onOpenCallback(): Promise<void> {
 async function startJanusRelay(): Promise<void> {
   if (!state.agent || !state.janusManager) return;
   const printerId = await state.agent.fetchPrinterId();
+  // stopBridge() may have stopped the relay while the ID was being fetched.
+  if (shuttingDown) return;
   if (!printerId) {
     console.warn(
       "[bridge] Could not fetch printer ID — Janus relay not started"
@@ -402,24 +409,44 @@ async function startJanusRelay(): Promise<void> {
   console.log(`[bridge] Janus relay active for printer ${printerId}`);
 }
 
+/** Local UDP port the camera's H.264 RTP stream is sent to Janus on. */
+export const JANUS_RTP_PORT = 17732;
+
+/**
+ * Points the agent at Janus and (re)starts RTP stream and relay. Called after
+ * awaiting Janus, so it re-checks for a shutdown that began in the meantime.
+ */
+async function startVideoPath(): Promise<void> {
+  if (shuttingDown) return;
+  if (!state.janusManager || !state.agent || !state.camera) return;
+  state.agent.setJanusUrl(state.janusManager.wsUrl);
+  // A Janus that restarted has lost the old RTP session.
+  state.camera.stopRtpStream();
+  state.camera.startRtpStream(JANUS_RTP_PORT);
+  await startJanusRelay();
+}
+
+/**
+ * Registered once per manager, independent of the first start's outcome:
+ * a Janus that only comes up later (watchdog/restart) still gets RTP + relay.
+ */
+function registerJanusRecovery(
+  manager: ReturnType<typeof createJanusManager>
+): void {
+  manager.onAvailable(() => {
+    console.log("[bridge] Janus available — starting RTP stream and relay");
+    startVideoPath().catch((err) =>
+      console.error("[bridge] Janus recovery failed:", err)
+    );
+  });
+}
+
 async function startJanus(): Promise<void> {
   if (!state.janusManager || !state.agent || !state.camera) return;
-  const RTP_PORT = 17732;
   const available = await state.janusManager.start();
   setJanusMode(state.janusManager.mode);
   if (!available) return;
-
-  state.agent.setJanusUrl(state.janusManager.wsUrl);
-  state.camera.startRtpStream(RTP_PORT);
-
-  state.janusManager.onCrash(async () => {
-    console.log("[bridge] Janus restarted — rebuilding RTP stream and relay");
-    state.camera!.stopRtpStream();
-    state.camera!.startRtpStream(RTP_PORT);
-    await startJanusRelay();
-  });
-
-  await startJanusRelay();
+  await startVideoPath();
 }
 
 export async function startBridge(port = 3000): Promise<void> {
@@ -472,6 +499,7 @@ export async function startBridge(port = 3000): Promise<void> {
 
   state.camera.start();
   state.janusManager = createJanusManager();
+  registerJanusRecovery(state.janusManager);
 
   state.agent.connect(onOpenCallback);
 

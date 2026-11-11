@@ -18,12 +18,14 @@ This strategy covers testing for SentryBridge — the backend Node.js/TypeScript
 
 **Scope:** Individual modules and functions in isolation.
 **Target modules:**
+
 - `src/config/` — Config module: `loadConfig()`, `saveConfig()`, `isConfigured()`
 - `src/prusalink/` — PrusaLink Client: all HTTP operations
 - `src/obico/` — Obico Agent: WebSocket protocol, pairing, passthru dispatch
 - `src/lib/` — Circuit Breaker, Retry, Health Monitor
 
 **Isolation strategy:** External dependencies are mocked:
+
 - PrusaLink HTTP API — mocked via `jest.fn()` / `jest.spyOn(global, 'fetch')`
 - Obico WebSocket — mock WS server (using `ws` library in test mode)
 - ffmpeg process — mocked child process spawn
@@ -36,15 +38,18 @@ This strategy covers testing for SentryBridge — the backend Node.js/TypeScript
 
 **Scope:** Module interactions, especially the Bridge Orchestrator coordinating multiple modules.
 **Target scenarios:**
+
 - Config hot-reload triggering bridge teardown and reinit
 - Bridge component reconnect (prusalink, obico, camera)
 - Graceful shutdown sequence (SIGTERM → ffmpeg kill → WS close → server close)
 - OctoPrint-compatible files API routes (`/api/files/`)
 
 **Integration test files:**
+
 - `bridge-reload.test.ts` — hot-reload flow
 - `bridge-reconnect.test.ts` — component reconnect
 - `bridge-shutdown.test.ts` — SIGTERM sequence
+- `bridge-janus-recovery.test.ts` — video path for a Janus that becomes available late
 - `files-routes.test.ts` — files API
 
 **Framework:** Jest + Supertest (for HTTP routes)
@@ -56,6 +61,7 @@ This strategy covers testing for SentryBridge — the backend Node.js/TypeScript
 **Execution:** Manual, performed before each release tag.
 
 **UAT scenarios (v1.1.0, all passed):**
+
 1. Setup wizard: PrusaLink → camera preview → Obico pairing → dashboard
 2. Live camera stream in Obico control panel (WebRTC via Janus)
 3. Pause/Resume/Cancel from Obico control panel
@@ -71,29 +77,29 @@ This strategy covers testing for SentryBridge — the backend Node.js/TypeScript
 
 ## 3. Tools and Infrastructure
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Jest | 29.x | Test runner and assertion library |
-| ts-jest | 29.x | TypeScript transformer for Jest |
-| @jest/globals | 29.x | Jest globals (describe, it, expect) |
-| jest-html-reporter | — | HTML report generation (`reports/test-report.html`) |
-| jest-junit | — | JUnit XML output (`reports/junit.xml`) for CI |
-| ws | 8.x | Mock WebSocket server in tests |
-| supertest | — | HTTP route testing |
+| Tool               | Version | Purpose                                             |
+| ------------------ | ------- | --------------------------------------------------- |
+| Jest               | 29.x    | Test runner and assertion library                   |
+| ts-jest            | 29.x    | TypeScript transformer for Jest                     |
+| @jest/globals      | 29.x    | Jest globals (describe, it, expect)                 |
+| jest-html-reporter | —       | HTML report generation (`reports/test-report.html`) |
+| jest-junit         | —       | JUnit XML output (`reports/junit.xml`) for CI       |
+| ws                 | 8.x     | Mock WebSocket server in tests                      |
+| supertest          | —       | HTTP route testing                                  |
 
 ---
 
 ## 4. Coverage Goals
 
-| Scope | Goal | Current (v1.1.0) |
-|-------|------|-----------------|
-| Config module | 100% line coverage | Achieved |
-| PrusaLink Client | 100% line coverage | Achieved |
-| Obico Agent | >90% line coverage | Achieved |
-| Circuit Breaker | 100% state transitions | Achieved |
-| Retry module | 100% backoff cases | Achieved |
-| Bridge Orchestrator | >80% branch coverage | Achieved |
-| React Frontend | Not targeted | Not measured |
+| Scope               | Goal                   | Current (v1.1.0) |
+| ------------------- | ---------------------- | ---------------- |
+| Config module       | 100% line coverage     | Achieved         |
+| PrusaLink Client    | 100% line coverage     | Achieved         |
+| Obico Agent         | >90% line coverage     | Achieved         |
+| Circuit Breaker     | 100% state transitions | Achieved         |
+| Retry module        | 100% backoff cases     | Achieved         |
+| Bridge Orchestrator | >80% branch coverage   | Achieved         |
+| React Frontend      | Not targeted           | Not measured     |
 
 **Overall:** 210+ tests, all passing on main branch.
 
@@ -116,6 +122,7 @@ npm run test:all
 ```
 
 Reports are written to `reports/` (gitignored):
+
 - `reports/test-report.html` — human-readable
 - `reports/junit.xml` — CI-compatible
 
@@ -126,6 +133,7 @@ Reports are written to `reports/` (gitignored):
 **TDD is mandatory** for the three testable backend modules: Config, PrusaLink Client, and Obico Agent.
 
 Development order enforced:
+
 1. Write the module interface (TypeScript types/exports)
 2. Write failing tests that describe expected behaviour
 3. Implement until all tests pass
@@ -137,8 +145,8 @@ This policy was applied throughout v1.0 and v1.1.0 development and is documented
 
 ## 7. Known Gaps
 
-| Gap | Rationale |
-|-----|-----------|
-| React frontend component tests | Mantine v9 + Vite setup deferred; E2E tooling (Playwright) not yet configured |
-| Performance tests (frame throughput) | LAN-only deployment; load testing not a priority for v1.x |
-| Security penetration testing | Acknowledged in NFR-S01; manual review performed for SSRF/EoP mitigations |
+| Gap                                  | Rationale                                                                     |
+| ------------------------------------ | ----------------------------------------------------------------------------- |
+| React frontend component tests       | Mantine v9 + Vite setup deferred; E2E tooling (Playwright) not yet configured |
+| Performance tests (frame throughput) | LAN-only deployment; load testing not a priority for v1.x                     |
+| Security penetration testing         | Acknowledged in NFR-S01; manual review performed for SSRF/EoP mitigations     |

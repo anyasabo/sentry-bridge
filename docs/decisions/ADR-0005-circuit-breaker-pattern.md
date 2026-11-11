@@ -29,6 +29,8 @@ All three components (keys: `"prusalink"`, `"obico_ws"`, `"camera"`) have dedica
 
 Default parameters: threshold=5 failures, reset timeout=60 s (configurable via environment variables).
 
+When the `"camera"` breaker is OPEN and refuses an MJPEG spawn, the camera schedules its next attempt for the breaker's `timeUntilHalfOpenMs` plus a 1 s margin. It relies only on that public stat, not on the order of the breaker's internal timers; the margin also bounds the retry rate if the breaker still refuses.
+
 ## Consequences
 
 - **Positive:** Fast-fail after 5 consecutive failures. Automatic recovery probe after 60 s. Circuit state is visible in the dashboard health card and `GET /api/health/` endpoint.
