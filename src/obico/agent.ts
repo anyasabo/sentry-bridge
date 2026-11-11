@@ -60,30 +60,41 @@ export function createObicoAgent(
   const janusQueue: string[] = [];
 
   function ensureJanusWs(): void {
-    if (janusWs && janusWs.readyState === WebSocket.OPEN) return;
+    // A socket that is still connecting flushes the queue once open; opening
+    // another one would orphan it.
+    if (
+      janusWs &&
+      (janusWs.readyState === WebSocket.OPEN ||
+        janusWs.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
     if (!janusWsUrl) return;
 
-    janusWs = new WebSocket(janusWsUrl, "janus-protocol");
-    janusWs.on("open", () => {
+    // Handlers use `socket`, not `janusWs`: by the time they fire, `janusWs`
+    // may already point to a newer socket.
+    const socket = new WebSocket(janusWsUrl, "janus-protocol");
+    janusWs = socket;
+    socket.on("open", () => {
       console.log(
         "[obico/janus] Local Janus WS open — flushing",
         janusQueue.length,
         "queued messages"
       );
-      for (const msg of janusQueue) janusWs!.send(msg);
+      for (const msg of janusQueue) socket.send(msg);
       janusQueue.length = 0;
     });
-    janusWs.on("message", (data) => {
+    socket.on("message", (data) => {
       // Forward Janus response back to Obico via agent WS
       if (ws?.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ janus: data.toString() }));
       }
     });
-    janusWs.on("close", () => {
+    socket.on("close", () => {
       console.log("[obico/janus] Local Janus WS closed");
-      janusWs = null;
+      if (janusWs === socket) janusWs = null;
     });
-    janusWs.on("error", (err) =>
+    socket.on("error", (err) =>
       console.error("[obico/janus] Local Janus WS error:", err.message)
     );
   }
