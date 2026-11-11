@@ -23,6 +23,7 @@ Docker-published ports bypass host firewalls such as `ufw`, because Docker manag
 - Everyone who can reach the web port has full control: they can read and change the config (including the stored PrusaLink password and Obico token), pause, resume, and cancel prints, upload files, start and delete prints, and view the camera.
 - The configured Obico server can control the printer through the bridge and can make the bridge download G-code files.
 - Anyone with access to the config volume or the Docker host can read the stored credentials.
+- Inside the container the bridge, Janus and ffmpeg run as the unprivileged `node` user (uid 1000); the entrypoint starts as root only to hand `/config` to that user. `/config` must be writable for uid 1000, otherwise the container falls back to root and logs a warning.
 
 ## Reporting a vulnerability
 

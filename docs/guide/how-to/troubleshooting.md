@@ -145,3 +145,11 @@ Start with the dashboard: at startup the bridge checks PrusaLink (reachable, cre
 ## Not listed here?
 
 If your issue is not covered above, check the [container logs](#3-obico-pairing-never-confirms--wizard-step-3-waits-indefinitely) first, then open an issue at [github.com/reneleban/sentry-bridge](https://github.com/reneleban/sentry-bridge).
+
+## Log shows "running as root" at startup
+
+**Symptom:** `[entrypoint] WARNING: /config is not writable for user 'node' ... running as root`.
+
+**Cause:** The container could not hand the config directory to the unprivileged `node` user (uid 1000), e.g. on NFS with `root_squash` or with rootless Docker. The bridge still works, but runs as root.
+
+**Fix:** Make the config directory writable for uid 1000 on the host, e.g. `sudo chown 1000:1000 ./config ./config/config.json`, then restart the container.
