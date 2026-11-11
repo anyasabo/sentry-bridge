@@ -3,12 +3,14 @@ import { EventEmitter } from "events";
 jest.mock("child_process");
 jest.mock("fs", () => ({
   ...jest.requireActual("fs"),
-  existsSync: () => true,
+  existsSync: (p: string) =>
+    mockJanusConfigDirExists || !/config[\\/]janus$/.test(p),
   mkdtempSync: () => "/tmp/janus-test",
   readdirSync: () => [],
 }));
 jest.mock("ws");
 let mockJanusMode = "bundled";
+let mockJanusConfigDirExists = true;
 jest.mock("../lib/env-config", () => ({
   ...jest.requireActual("../lib/env-config"),
   get janusModeEnv() {
@@ -61,6 +63,7 @@ describe("Janus manager, bundled mode", () => {
     jest.useFakeTimers({ doNotFake: ["setImmediate"] });
     janusAnswers = true;
     mockJanusMode = "bundled";
+    mockJanusConfigDirExists = true;
     MockWebSocket.mockImplementation(fakeSocket);
     jest.spyOn(console, "log").mockImplementation(() => {});
     jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -80,6 +83,14 @@ describe("Janus manager, bundled mode", () => {
     expect(await started).toBe(true);
     return { manager, proc };
   }
+
+  it("warns when no Janus config directory is found", async () => {
+    mockJanusConfigDirExists = false;
+    const { manager } = await startManager();
+    const warned = (console.warn as jest.Mock).mock.calls.flat().join("\n");
+    expect(warned).toMatch(/no janus config directory/i);
+    manager.stop();
+  });
 
   it("leaves a responsive Janus alone", async () => {
     const { manager, proc } = await startManager();

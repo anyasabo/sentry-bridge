@@ -115,6 +115,12 @@ export interface ObicoAgent {
   setJanusUrl(url: string): void;
 }
 
+// READY = idle with a print prepared ("ready to print"), not printing.
+// STOPPED = a print was cancelled; the printer is idle again.
+export function isIdleState(state: string): boolean {
+  return state === "IDLE" || state === "READY" || state === "STOPPED";
+}
+
 export function buildStatusMessage(
   status: PrinterStatus,
   job: JobInfo | null,
@@ -125,9 +131,10 @@ export function buildStatusMessage(
   const now = Math.floor(Date.now() / 1000);
   const isPrinting = status.state === "PRINTING";
   const isPaused = status.state === "PAUSED" || status.state === "ATTENTION";
+  // FINISHING is dead with current Buddy firmware (reported as PRINTING); kept for safety.
   const isFinishing = status.state === "FINISHING";
   const isError = status.state === "ERROR";
-  const isReady = status.state === "IDLE";
+  const isReady = status.state === "IDLE" || status.state === "READY";
 
   const webcamEntry = streamUrl
     ? {
@@ -153,10 +160,11 @@ export function buildStatusMessage(
     // differ by far more than Obico's ±20 skew window.
     // null means "unknown": Obico keeps its current print. -1 ends the current print.
     // BUSY can occur during a print (e.g. crash recovery), so it must not end the print.
+    // UNKNOWN says nothing about the print, so it must not end it either.
     current_print_ts:
       isPrinting || isPaused || isFinishing
         ? (printStartTs ?? null)
-        : status.state === "BUSY"
+        : status.state === "BUSY" || status.state === "UNKNOWN"
           ? null
           : -1,
     ...(webcamEntry ? { settings: { webcams: [webcamEntry] } } : {}),
@@ -208,6 +216,7 @@ export function buildStatusMessage(
 function toStateText(state: PrinterStatus["state"]): string {
   const map: Record<PrinterStatus["state"], string> = {
     IDLE: "Operational",
+    READY: "Operational",
     BUSY: "Busy",
     PRINTING: "Printing",
     PAUSED: "Paused",
@@ -216,6 +225,7 @@ function toStateText(state: PrinterStatus["state"]): string {
     STOPPED: "Operational",
     ERROR: "Error",
     ATTENTION: "Paused",
+    UNKNOWN: "Unknown",
   };
   return map[state];
 }

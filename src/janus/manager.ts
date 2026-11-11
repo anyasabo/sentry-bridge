@@ -100,6 +100,10 @@ export function createJanusManager(): JanusManager {
       for (const file of fs.readdirSync(configDir)) {
         fs.copyFileSync(path.join(configDir, file), path.join(dir, file));
       }
+    } else {
+      console.warn(
+        `[janus] No Janus config directory found (looked in ${projectConfigDir} and ${distConfigDir}) — starting with an empty config directory`
+      );
     }
 
     const jcfgPath = path.join(dir, "janus.jcfg");

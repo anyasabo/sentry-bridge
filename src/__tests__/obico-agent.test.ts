@@ -127,6 +127,21 @@ describe("buildStatusMessage()", () => {
     expect(msg.current_print_ts).toBeNull();
   });
 
+  it("treats READY (ready to print) as idle: ready, Operational, current_print_ts -1", () => {
+    const msg = buildStatusMessage({ ...idleStatus, state: "READY" }, null);
+    expect(msg.current_print_ts).toBe(-1);
+    expect(msg.status.state.text).toBe("Operational");
+    expect(msg.status.state.flags.ready).toBe(true);
+    expect(msg.status.state.flags.printing).toBe(false);
+  });
+
+  it("sends current_print_ts null in UNKNOWN, so Obico keeps the current print", () => {
+    const msg = buildStatusMessage({ ...idleStatus, state: "UNKNOWN" }, null);
+    expect(msg.current_print_ts).toBeNull();
+    expect(msg.status.state.text).toBe("Unknown");
+    expect(msg.status.state.flags.ready).toBe(false);
+  });
+
   it("reflects PAUSED state", () => {
     const msg = buildStatusMessage(
       { ...idleStatus, state: "PAUSED" },
@@ -347,6 +362,112 @@ describe("sendFrame()", () => {
     await expect(agent.sendFrame(Buffer.from([0xff, 0xd9]))).rejects.toThrow(
       "400"
     );
+  });
+
+  it("includes a truncated response body in the error", async () => {
+    mockFetch.mockResolvedValue({
+      ...mockResponse(413),
+      text: () => Promise.resolve("Request too large " + "x".repeat(1000)),
+    });
+    const agent = createObicoAgent(
+      { serverUrl: "http://obico.local", apiKey: "test-key" },
+      mockHttp,
+      mockDispatcher
+    );
+    const err = (await agent
+      .sendFrame(Buffer.from([0xff, 0xd9]))
+      .catch((e: Error) => e)) as Error;
+    expect(err.message).toContain("413");
+    expect(err.message).toContain("Request too large");
+    expect(err.message.length).toBeLessThan(300);
+  });
+
+  it("aborts the upload after 15 s", async () => {
+    jest.useFakeTimers();
+    try {
+      mockFetch.mockImplementation(
+        (_url: string, init: { signal: AbortSignal }) =>
+          new Promise((_, reject) =>
+            init.signal.addEventListener("abort", () =>
+              reject(new Error("aborted"))
+            )
+          )
+      );
+      const agent = createObicoAgent(
+        { serverUrl: "http://obico.local", apiKey: "test-key" },
+        mockHttp,
+        mockDispatcher
+      );
+      let settled = false;
+      const p = agent
+        .sendFrame(Buffer.from([0xff, 0xd9]))
+        .catch((e: Error) => e)
+        .finally(() => (settled = true));
+      await jest.advanceTimersByTimeAsync(14_999);
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(((await p) as Error).message).toMatch(/abort/i);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("reports recovery once uploads succeed after persistent failures", async () => {
+    const { healthMonitor } = await import("../lib/health");
+    const spy = jest.spyOn(healthMonitor, "pushError");
+    const agent = createObicoAgent(
+      { serverUrl: "http://obico.local", apiKey: "test-key" },
+      mockHttp,
+      mockDispatcher
+    );
+    mockFetch.mockResolvedValue(mockResponse(500));
+    for (let i = 0; i < 3; i++) {
+      await agent.sendFrame(Buffer.from([0xff, 0xd9])).catch(() => {});
+    }
+    mockFetch.mockResolvedValue(mockResponse(200));
+    await agent.sendFrame(Buffer.from([0xff, 0xd9]));
+    await agent.sendFrame(Buffer.from([0xff, 0xd9]));
+    const msgs = spy.mock.calls
+      .filter(([c]) => c === "obico_ws")
+      .map(([, m]) => m);
+    spy.mockRestore();
+    expect(msgs.filter((m) => /recovered/i.test(m))).toHaveLength(1);
+  });
+
+  it("does not report recovery below the failure threshold", async () => {
+    const { healthMonitor } = await import("../lib/health");
+    const spy = jest.spyOn(healthMonitor, "pushError");
+    const agent = createObicoAgent(
+      { serverUrl: "http://obico.local", apiKey: "test-key" },
+      mockHttp,
+      mockDispatcher
+    );
+    mockFetch.mockResolvedValue(mockResponse(500));
+    await agent.sendFrame(Buffer.from([0xff, 0xd9])).catch(() => {});
+    mockFetch.mockResolvedValue(mockResponse(200));
+    await agent.sendFrame(Buffer.from([0xff, 0xd9]));
+    const calls = spy.mock.calls.filter(([c]) => c === "obico_ws");
+    spy.mockRestore();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("reports persistent upload failures to the health monitor once", async () => {
+    const { healthMonitor } = await import("../lib/health");
+    const spy = jest.spyOn(healthMonitor, "pushError");
+    mockFetch.mockResolvedValue(mockResponse(500));
+    const agent = createObicoAgent(
+      { serverUrl: "http://obico.local", apiKey: "test-key" },
+      mockHttp,
+      mockDispatcher
+    );
+    for (let i = 0; i < 5; i++) {
+      await agent.sendFrame(Buffer.from([0xff, 0xd9])).catch(() => {});
+    }
+    const calls = spy.mock.calls.filter(
+      ([c, m]) => c === "obico_ws" && /frame upload/i.test(m)
+    );
+    spy.mockRestore();
+    expect(calls).toHaveLength(1);
   });
 });
 

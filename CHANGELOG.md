@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - README no longer claims the bridge offers no file upload (`POST /api/files/upload`) (#90)
+- RTSP passwords containing `/`, spaces or `@`, or split across ffmpeg output chunks, no longer leak into logs (#62)
+- Frame uploads to Obico time out after 15 s, include the server's response in the error, and report persistent failures to the health view (#62)
+- The bundled Janus logs a warning when it finds no config directory (#62)
+- README states the ffmpeg 5+ requirement for source builds (#62)
+- PrusaLink READY ("ready to print") is reported to Obico as idle, and UNKNOWN no longer ends the current print (#64)
 
 ### Planned — Milestone 3
 

@@ -7,14 +7,18 @@ export interface PrusaLinkConfig {
 export interface PrinterStatus {
   state:
     | "IDLE"
+    | "READY"
     | "BUSY"
     | "PRINTING"
     | "PAUSED"
     | "FINISHED"
+    // Not reported by current Buddy firmware (it maps finishing to PRINTING);
+    // kept for older/other firmware.
     | "FINISHING"
     | "STOPPED"
     | "ERROR"
-    | "ATTENTION";
+    | "ATTENTION"
+    | "UNKNOWN";
   tempBed: number;
   targetBed: number;
   tempNozzle: number;

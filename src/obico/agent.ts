@@ -8,6 +8,7 @@ import {
   HttpFetcher,
   PrusaLinkCommandDispatcher,
   buildStatusMessage,
+  isIdleState,
 } from "./types";
 import { PrinterStatus, JobInfo } from "../prusalink/types";
 import {
@@ -26,6 +27,13 @@ import {
   handleTunnelRequest,
 } from "./tunnel";
 import { HealthState, ErrorSeverity } from "../lib/health-monitor";
+
+// A frame upload that hangs would block the next one; Obico reports the
+// status in a short body (e.g. 413), so a prefix is enough for the log.
+const FRAME_UPLOAD_TIMEOUT_MS = 15_000;
+const FRAME_UPLOAD_ERROR_BODY_CHARS = 200;
+// Consecutive failures before the health monitor hears about it.
+const FRAME_UPLOAD_FAILURE_THRESHOLD = 3;
 
 export function createObicoAgent(
   config: ObicoAgentConfig,
@@ -382,6 +390,37 @@ export function createObicoAgent(
     }
   }
 
+  let frameUploadFailures = 0;
+
+  async function uploadFrame(jpeg: Buffer): Promise<void> {
+    const form = new FormData();
+    form.append(
+      "pic",
+      new Blob([new Uint8Array(jpeg)], { type: "image/jpeg" }),
+      "pic.jpg"
+    );
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), FRAME_UPLOAD_TIMEOUT_MS);
+    let res: Awaited<ReturnType<HttpFetcher["fetch"]>>;
+    try {
+      res = await http.fetch(apiUrl(config.serverUrl, "/api/v1/octo/pic/"), {
+        method: "POST",
+        headers: { Authorization: `Token ${config.apiKey}` },
+        body: form,
+        signal: abort.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      const detail = body.trim().slice(0, FRAME_UPLOAD_ERROR_BODY_CHARS);
+      throw new Error(
+        `sendFrame failed: ${res.status}${detail ? ` ${detail}` : ""}`
+      );
+    }
+  }
+
   return {
     connect(onOpen?: () => void): void {
       disconnecting = false;
@@ -474,17 +513,13 @@ export function createObicoAgent(
       // on subsequent ticks and Obico's UI flickers between "has file" and
       // "no file" → inconsistent display.
       const shouldResetAfterSend =
-        (status.state === "IDLE" || status.state === "STOPPED") &&
-        (wasActiveState || wasFinishingState);
+        isIdleState(status.state) && (wasActiveState || wasFinishingState);
 
       // During FINISHING or FINISHED, use cached job if no fresh job available
       const effectiveJob = job ?? (isFinishingOrFinished ? cachedJob : null);
 
       // Reset fileId only on true idle/stopped — not FINISHED/FINISHING (preserve for the finishing status message)
-      if (
-        (status.state === "IDLE" || status.state === "STOPPED") &&
-        activePrintFileId !== null
-      ) {
+      if (isIdleState(status.state) && activePrintFileId !== null) {
         activePrintFileId = null;
       }
 
@@ -529,21 +564,29 @@ export function createObicoAgent(
     },
 
     async sendFrame(jpeg: Buffer): Promise<void> {
-      const form = new FormData();
-      form.append(
-        "pic",
-        new Blob([new Uint8Array(jpeg)], { type: "image/jpeg" }),
-        "pic.jpg"
-      );
-      const res = await http.fetch(
-        apiUrl(config.serverUrl, "/api/v1/octo/pic/"),
-        {
-          method: "POST",
-          headers: { Authorization: `Token ${config.apiKey}` },
-          body: form,
+      try {
+        await uploadFrame(jpeg);
+        if (frameUploadFailures >= FRAME_UPLOAD_FAILURE_THRESHOLD) {
+          // The health monitor has no info level; WARN keeps the recovery
+          // next to the failure it resolves.
+          healthMonitor.pushError(
+            "obico_ws",
+            `Frame upload recovered after ${frameUploadFailures} failures`,
+            ErrorSeverity.WARN
+          );
         }
-      );
-      if (!res.ok) throw new Error(`sendFrame failed: ${res.status}`);
+        frameUploadFailures = 0;
+      } catch (err) {
+        if (++frameUploadFailures === FRAME_UPLOAD_FAILURE_THRESHOLD) {
+          const reason = err instanceof Error ? err.message : String(err);
+          healthMonitor.pushError(
+            "obico_ws",
+            `Frame upload failing: ${reason}`,
+            ErrorSeverity.WARN
+          );
+        }
+        throw err;
+      }
     },
 
     async fetchPrinterId(): Promise<number | null> {

@@ -265,7 +265,7 @@ For local development or custom builds:
 ### Prerequisites
 
 - Node.js 26+
-- ffmpeg
+- ffmpeg 5 or newer (in ffmpeg 4, `-timeout` switches RTSP to listen mode, so the camera test hangs)
 - Docker Desktop (for Janus sidecar on Mac)
 
 ### Setup

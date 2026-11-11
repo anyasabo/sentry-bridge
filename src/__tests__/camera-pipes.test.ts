@@ -25,7 +25,7 @@ const fs = require("fs");
 const args = process.argv.slice(2);
 const isRtp = args.includes("rtp");
 fs.writeSync(isRtp ? 1 : 2, "x".repeat(1024 * 1024));
-if (isRtp) fs.writeSync(2, "past-stdout-write");
+if (isRtp) fs.writeSync(2, "past-stdout-write\\n");
 else fs.writeSync(1, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
 if (args.includes("-frames:v")) process.exit(0);
 setTimeout(() => {}, 60000);
