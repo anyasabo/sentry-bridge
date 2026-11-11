@@ -4,6 +4,8 @@ SentryBridge exposes a REST API consumed by the React web UI and by Obico's `htt
 
 For the complete authoritative endpoint specification, see → [`docs/requirements/api.yaml`](../../requirements/api.yaml) (OpenAPI 3.0).
 
+The API has no authentication: SentryBridge is built for the LAN. Anyone who can reach port 3000 can call every endpoint, so do not expose it to the internet or untrusted networks.
+
 This guide covers the most useful endpoints with practical curl examples.
 
 ---

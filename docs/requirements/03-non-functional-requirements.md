@@ -30,12 +30,12 @@
 
 ### Security
 
-| ID      | Requirement                       | Measurable Criterion                                                                                                                                                       |
-| ------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| NFR-S01 | LAN-only deployment               | No REST API authentication is enforced in v1.1.0 — deployment is LAN-only; users must not expose port 3000 to the internet without additional network-level controls       |
-| NFR-S02 | SSRF mitigation for file download | `file_downloader.download` only downloads from URLs whose origin matches the configured `obicoServerUrl` — any other origin is rejected with 400                           |
-| NFR-S03 | http.tunnel path restriction      | The `http.tunnelv2` handler only proxies requests to `/api/*` paths and HTTP methods `GET`, `POST`, `DELETE` — prevents use as a general HTTP proxy                        |
-| NFR-S04 | Credential storage                | PrusaLink credentials and Obico API key are stored in plaintext in `/config/config.json` on the Docker volume; the volume must be access-controlled at the OS/Docker level |
+| ID      | Requirement                       | Measurable Criterion                                                                                                                                                                                                                        |
+| ------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-S01 | LAN-only deployment               | The bridge is built for the LAN: the web UI and REST API have no authentication by design (#30). Users must not expose port 3000 to the internet or untrusted networks; remote access goes through a VPN or an authenticating reverse proxy |
+| NFR-S02 | SSRF mitigation for file download | `file_downloader.download` only downloads from URLs whose origin matches the configured `obicoServerUrl` — any other origin is rejected with 400                                                                                            |
+| NFR-S03 | http.tunnel path restriction      | The `http.tunnelv2` handler only proxies requests to `/api/*` paths and HTTP methods `GET`, `POST`, `DELETE` — prevents use as a general HTTP proxy                                                                                         |
+| NFR-S04 | Credential storage                | PrusaLink credentials and Obico API key are stored in plaintext in `/config/config.json` on the Docker volume; the volume must be access-controlled at the OS/Docker level                                                                  |
 
 ### Portability
 

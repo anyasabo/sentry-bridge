@@ -156,6 +156,7 @@ These are intentional product decisions, not bugs:
 
 - **One container = one printer.** Simplifies config, isolation, and restarts. Run multiple containers on different ports for multiple printers.
 - **RTSP camera is mandatory.** Obico's AI failure detection requires a live stream — there is no "disable camera" mode.
+- **Built for the LAN, without authentication.** The web UI and the REST API have no login. Anyone who can reach port 3000 can change the config, pause or cancel prints, start and delete files. Do not expose port 3000 to the internet or to networks you don't trust. For remote access, put the bridge behind a VPN (e.g. Tailscale or WireGuard) or a reverse proxy with its own authentication.
 - **Manual printer controls are limited to pause / resume / cancel.** The PrusaLink API does not expose file upload, filament load/unload, or print queue management, so the bridge does not either.
 
 ## Troubleshooting

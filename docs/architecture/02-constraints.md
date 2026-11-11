@@ -11,7 +11,7 @@
 | TC-05 | Config: JSON file on mounted Docker volume                     | No database dependency; config survives container restarts                                                        |
 | TC-06 | Camera: RTSP only (`rtsp://[ip]/live`)                         | Buddy3D board on Prusa Core One exposes only RTSP; no HTTP snapshot endpoint during streaming                     |
 | TC-07 | Obico protocol: OctoPrint agent identity                       | Moonraker identity would unlock Janus features that are unstable; OctoPrint identity is the tested path (ADR #46) |
-| TC-08 | No API authentication (current)                                | LAN-only deployment; risk accepted; API auth is a candidate for a future milestone                                |
+| TC-08 | No API authentication (by design)                              | Built for the LAN; risk accepted. Remote access via VPN or an authenticating reverse proxy (#30)                  |
 
 ## Organizational Constraints
 
