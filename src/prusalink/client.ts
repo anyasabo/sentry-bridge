@@ -1,5 +1,6 @@
 import DigestFetch from "digest-fetch";
 import {
+  ConnectionTestResult,
   FileEntry,
   JobInfo,
   PrinterStatus,
@@ -79,15 +80,28 @@ export function createPrusaLinkClient(
       return { hostname: body.hostname as string };
     },
 
-    async testConnection() {
+    async testConnection(): Promise<ConnectionTestResult> {
       try {
         const res = await get("/api/v1/info");
         if (res.status === 401)
-          return { ok: false, error: "Auth failed (401)" };
-        if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+          return {
+            ok: false,
+            reason: "unauthorized",
+            error: "Auth failed (401)",
+          };
+        if (!res.ok)
+          return {
+            ok: false,
+            reason: "unreachable",
+            error: `HTTP ${res.status}`,
+          };
         return { ok: true };
       } catch (err: unknown) {
-        return { ok: false, error: (err as Error).message };
+        return {
+          ok: false,
+          reason: "unreachable",
+          error: (err as Error).message,
+        };
       }
     },
 
@@ -193,15 +207,13 @@ export function createPrusaLinkClient(
       const children: any[] = body.children ?? [];
       return children
         .filter((f: any) => f.type === "PRINT_FILE")
-        .map(
-          (f: any): FileEntry => ({
-            name: f.name,
-            displayName: (f.display_name as string) ?? (f.name as string),
-            path: `/usb/${f.name}`,
-            size: f.size ?? 0,
-            date: new Date((f.m_timestamp ?? 0) * 1000).toISOString(),
-          })
-        );
+        .map((f: any): FileEntry => ({
+          name: f.name,
+          displayName: (f.display_name as string) ?? (f.name as string),
+          path: `/usb/${f.name}`,
+          size: f.size ?? 0,
+          date: new Date((f.m_timestamp ?? 0) * 1000).toISOString(),
+        }));
     },
 
     async uploadFile(filename: string, data: Buffer): Promise<void> {

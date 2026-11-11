@@ -73,6 +73,7 @@ describe("PrusaLinkClient", () => {
       const result = await client.testConnection();
       expect(result.ok).toBe(false);
       expect(result.error).toMatch(/auth/i);
+      expect(result.reason).toBe("unauthorized");
     });
 
     it("returns ok:false on network error", async () => {
@@ -81,6 +82,7 @@ describe("PrusaLinkClient", () => {
       const result = await client.testConnection();
       expect(result.ok).toBe(false);
       expect(result.error).toContain("ECONNREFUSED");
+      expect(result.reason).toBe("unreachable");
     });
   });
 

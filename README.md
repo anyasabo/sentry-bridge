@@ -161,6 +161,8 @@ These are intentional product decisions, not bugs:
 
 ## Troubleshooting
 
+If a startup check fails (PrusaLink, credentials, camera, Obico, pairing), the dashboard shows which one and how to fix it, with a **Re-check** button. The checks never stop the bridge from starting.
+
 ### 1. PrusaLink auth fails (401)
 
 - Symptom: Wizard step 1 fails with 401 Unauthorized

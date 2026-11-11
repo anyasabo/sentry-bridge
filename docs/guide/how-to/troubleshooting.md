@@ -2,6 +2,8 @@
 
 This guide covers errors with known solutions, drawn from v1.0 and v1.1.0 hardware testing on a Prusa Core One.
 
+Start with the dashboard: at startup the bridge checks PrusaLink (reachable, credentials), the camera RTSP stream, the Obico server and the pairing. If any check fails, a panel at the top of the dashboard lists each check with a fix hint; use **Re-check** after fixing. The bridge keeps running and reconnecting either way.
+
 ---
 
 ## 1. PrusaLink auth fails — 401 Unauthorized

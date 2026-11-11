@@ -109,6 +109,8 @@ export default {
     camera: {
       heading: "Kamera",
       no_frame: "Kein Bild verfügbar",
+      badge_live: "{{fps}} fps · letztes Bild vor {{seconds}} s",
+      badge_stalled: "Seit {{seconds}} s kein Bild",
     },
     fileBrowser: {
       title: "G-Code Dateien",
@@ -159,5 +161,30 @@ export default {
     light: "Hell",
     dark: "Dunkel",
     system: "System",
+  },
+  bootChecks: {
+    title: "Startprüfung hat ein Problem gefunden",
+    recheck: "Erneut prüfen",
+    running: "Startprüfung läuft…",
+    allPassed: "Alle Startprüfungen bestanden",
+    checks: {
+      prusalink_reachable: "PrusaLink erreichbar",
+      prusalink_auth: "PrusaLink-Zugangsdaten",
+      camera_rtsp: "Kamera-RTSP-Stream",
+      obico_reachable: "Obico-Server erreichbar",
+      obico_paired: "Mit Obico gekoppelt",
+    },
+    hints: {
+      prusalinkUnreachable:
+        "Drucker-IP prüfen und ob der Drucker eingeschaltet und im selben Netzwerk ist.",
+      prusalinkCredentials:
+        "PrusaLink-Benutzername und -Passwort prüfen (Drucker: Einstellungen → Netzwerk → PrusaLink).",
+      cameraUnreachable:
+        "Prüfen, ob der Drucker eine Kamera hat und in Prusa Connect unter Streaming RTSP eingestellt ist.",
+      obicoUnreachable:
+        "Obico-Server-URL prüfen und ob der Server läuft und von der Bridge erreichbar ist.",
+      obicoNotPaired:
+        "Den Einrichtungsassistenten erneut ausführen, um mit Obico zu koppeln.",
+    },
   },
 };

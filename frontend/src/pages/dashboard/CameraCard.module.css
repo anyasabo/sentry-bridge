@@ -1,0 +1,54 @@
+/* Stream status badge in the top-right corner of the camera image. */
+.badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+
+.badge:focus-visible {
+  outline: 2px solid var(--mantine-color-blue-filled);
+  outline-offset: 2px;
+}
+
+.dotLive,
+.dotLate {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Re-mounted per frame (React key), so it pulses on each new frame. */
+.dotLive {
+  background-color: var(--mantine-color-green-5);
+  animation: pulse 400ms ease-out;
+}
+
+.dotLate {
+  background-color: var(--mantine-color-yellow-5);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dotLive {
+    animation: none;
+  }
+}

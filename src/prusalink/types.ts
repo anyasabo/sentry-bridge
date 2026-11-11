@@ -53,8 +53,16 @@ export interface FileEntry {
   date: string; // ISO-String
 }
 
+export interface ConnectionTestResult {
+  ok: boolean;
+  /** Why the test failed: the printer rejected the credentials, or it could
+   *  not be reached / answered with an error. Absent when ok. */
+  reason?: "unauthorized" | "unreachable";
+  error?: string;
+}
+
 export interface PrusaLinkClient {
-  testConnection(): Promise<{ ok: boolean; error?: string }>;
+  testConnection(): Promise<ConnectionTestResult>;
   getInfo(): Promise<PrinterInfo>;
   getStatus(): Promise<PrinterStatus>;
   getJob(): Promise<JobInfo | null>;

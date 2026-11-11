@@ -44,6 +44,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
 
+  /api/boot-checks:
+    get:
+      tags: [health]
+      summary: Latest startup check results
+      description: Results of the non-blocking checks run at bridge start. checkedAt is null until the first run finishes.
+      operationId: getBootChecks
+      responses:
+        "200":
+          description: Latest report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootCheckReport"
+    post:
+      tags: [health]
+      summary: Run the startup checks again
+      operationId: runBootChecks
+      responses:
+        "200":
+          description: Fresh report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootCheckReport"
+        "409":
+          description: Bridge is not configured
+
   /api/health/live:
     get:
       tags: [health]
@@ -608,6 +635,34 @@ paths:
 
 components:
   schemas:
+    BootCheckReport:
+      type: object
+      properties:
+        checkedAt:
+          type: string
+          format: date-time
+          nullable: true
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                enum:
+                  [
+                    prusalink_reachable,
+                    prusalink_auth,
+                    camera_rtsp,
+                    obico_reachable,
+                    obico_paired,
+                  ]
+              ok:
+                type: boolean
+              hint:
+                type: string
+                nullable: true
+                description: Fix-hint key; null when the check passed. Never contains credentials.
     Error:
       type: object
       properties:

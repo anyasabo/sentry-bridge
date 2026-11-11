@@ -6,6 +6,7 @@ import { streamRouter } from "./routes/stream";
 import healthRouter from "./routes/health";
 import bridgeRouter from "./routes/bridge";
 import filesRouter from "./routes/files";
+import bootChecksRouter from "./routes/boot-checks";
 
 export const app = express();
 
@@ -15,6 +16,7 @@ app.use("/api/health", healthRouter);
 app.use("/api/wizard", wizardRouter);
 app.use("/api/bridge", bridgeRouter);
 app.use("/api/files", filesRouter);
+app.use("/api/boot-checks", bootChecksRouter);
 app.use("/api", dashboardRouter);
 app.use("/", streamRouter);
 

@@ -3,6 +3,7 @@ import { Container, Stack, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { usePrinterStatus } from "./usePrinterStatus";
 import { HealthCard } from "./HealthCard";
+import { BootChecksCard } from "./BootChecksCard";
 import { PrinterCard } from "./PrinterCard";
 import { CameraCard } from "./CameraCard";
 import { ConfigCard } from "./ConfigCard";
@@ -26,6 +27,7 @@ export function DashboardPage() {
         {printerName ?? t("dashboard.title")}
       </Title>
       <Stack gap="md">
+        <BootChecksCard />
         <HealthCard />
         <PrinterCard status={status} />
         <CameraCard />

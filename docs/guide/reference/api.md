@@ -40,6 +40,15 @@ curl -w "\nHTTP %{http_code}\n" http://localhost:3000/api/health/ready
 
 Returns `200` when all components are operational. Returns `503` when a critical component (PrusaLink, Camera, or Obico WS) has been DOWN for longer than `HEALTHCHECK_CRITICAL_TIMEOUT_MS` (default: 120 seconds).
 
+### Startup checks
+
+```bash
+curl http://localhost:3000/api/boot-checks | jq .          # latest results
+curl -X POST http://localhost:3000/api/boot-checks | jq .  # run again now
+```
+
+The bridge runs these checks once at startup, in the background; they never block or delay it. Each result is `{ "id", "ok", "hint" }` for `prusalink_reachable`, `prusalink_auth`, `camera_rtsp`, `obico_reachable` and `obico_paired`. `hint` is a fix-hint key (`null` when the check passed) and never contains credentials. `checkedAt` is `null` until the first run finishes. `POST` returns `409` when the bridge is not configured.
+
 ### Detailed per-component health
 
 ```bash

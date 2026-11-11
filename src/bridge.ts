@@ -9,6 +9,7 @@ import { createPrusaLinkClient } from "./prusalink/client";
 import { createCamera } from "./camera/camera";
 import { setCameraInstance } from "./camera/registry";
 import { createObicoAgent } from "./obico/agent";
+import { runAndStoreBootChecks } from "./boot/service";
 import {
   createFilePrintStartStore,
   printStartStorePath,
@@ -516,6 +517,11 @@ export async function startBridge(port = 3000): Promise<void> {
       console.error("[bridge] applyConfigChange failed:", err)
     );
   });
+
+  // Diagnostics only (#13): never gates or delays the bridge.
+  runAndStoreBootChecks(config).catch((err) =>
+    console.error("[bridge] Boot checks failed:", err)
+  );
 
   console.log("[bridge] Running");
 }
