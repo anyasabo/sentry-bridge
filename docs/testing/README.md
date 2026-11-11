@@ -14,7 +14,7 @@ This directory contains the testing documentation for SentryBridge, structured a
 
 | Aspect | Detail |
 |--------|--------|
-| Backend test framework | Jest with ts-jest |
+| Backend test framework | Jest with @swc/jest |
 | Test location | `src/__tests__/` |
 | Run tests | `npm run test:backend` |
 | Test reports | `reports/test-report.html`, `reports/junit.xml` |

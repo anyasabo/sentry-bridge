@@ -4,7 +4,7 @@
 
 | ID    | Constraint                                                     | Rationale                                                                                                         |
 | ----- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| TC-01 | Runtime: Node.js 22 + TypeScript                               | Chosen in Milestone 1; test suite and tooling are built around this stack                                         |
+| TC-01 | Runtime: Node.js 26 + TypeScript                               | Chosen in Milestone 1; test suite and tooling are built around this stack                                         |
 | TC-02 | Frontend: React + Vite + Mantine v9                            | Established stack; changing would require full UI rewrite                                                         |
 | TC-03 | Deployment: Single Docker container (alpine-based) with ffmpeg | Simplest possible deployment for home lab use                                                                     |
 | TC-04 | Multi-platform: linux/amd64 + linux/arm64                      | Must run on Unraid (typically AMD64) and Raspberry Pi / NAS (ARM64)                                               |

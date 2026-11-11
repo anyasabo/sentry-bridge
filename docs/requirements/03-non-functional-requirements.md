@@ -42,7 +42,7 @@
 | ID       | Requirement            | Measurable Criterion                                                                                          |
 | -------- | ---------------------- | ------------------------------------------------------------------------------------------------------------- |
 | NFR-PO01 | Container platforms    | Docker image built for `linux/amd64` and `linux/arm64`; verified on Unraid (AMD64) and Raspberry Pi 4 (ARM64) |
-| NFR-PO02 | Node.js runtime        | Requires Node.js 22+; Docker image uses `node:22-alpine`                                                      |
+| NFR-PO02 | Node.js runtime        | Requires Node.js 26+; Docker image uses `node:26-alpine`                                                      |
 | NFR-PO03 | No database dependency | All persistent state is stored in `/config/config.json` — no external database required                       |
 
 ### Maintainability

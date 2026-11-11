@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM node:22-alpine AS frontend-build
+FROM node:26-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM node:22-alpine AS backend-build
+FROM node:26-alpine AS backend-build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -16,8 +16,8 @@ COPY src/ ./src/
 RUN npm run build:backend
 
 # Stage 3: Runtime
-# node:22-alpine (Node.js 22 LTS) — janus available via Alpine community repo
-FROM node:22-alpine AS runtime
+# node:26-alpine (Node.js 26 LTS) — janus available via Alpine community repo
+FROM node:26-alpine AS runtime
 
 RUN apk add --no-cache ffmpeg janus-gateway
 

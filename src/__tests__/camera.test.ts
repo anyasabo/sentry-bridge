@@ -7,6 +7,15 @@ import * as circuitBreakerModule from "../lib/circuit-breaker";
 import { CircuitState } from "../lib/circuit-breaker";
 
 jest.mock("child_process");
+// Wrap the real factory in a jest.fn so single tests can override it
+// (ES module exports are not redefinable, so jest.spyOn cannot patch them).
+jest.mock("../lib/circuit-breaker", () => {
+  const actual = jest.requireActual("../lib/circuit-breaker");
+  return {
+    ...actual,
+    createCircuitBreaker: jest.fn(actual.createCircuitBreaker),
+  };
+});
 import * as cp from "child_process";
 
 const mockSpawn = cp.spawn as jest.MockedFunction<typeof cp.spawn>;
@@ -570,19 +579,21 @@ describe("Camera", () => {
       const execute = jest
         .fn()
         .mockRejectedValue(new Error("Circuit breaker is OPEN"));
-      jest.spyOn(circuitBreakerModule, "createCircuitBreaker").mockReturnValue({
-        state: CircuitState.OPEN,
-        stats: {
+      jest
+        .mocked(circuitBreakerModule.createCircuitBreaker)
+        .mockReturnValueOnce({
           state: CircuitState.OPEN,
-          failureCount: 5,
-          totalFailures: 5,
-          totalSuccesses: 0,
-          openedAt: 0,
-          timeUntilHalfOpenMs: 0,
-        },
-        execute,
-        reset: jest.fn(),
-      });
+          stats: {
+            state: CircuitState.OPEN,
+            failureCount: 5,
+            totalFailures: 5,
+            totalSuccesses: 0,
+            openedAt: 0,
+            timeUntilHalfOpenMs: 0,
+          },
+          execute,
+          reset: jest.fn(),
+        });
       const camera = createCamera(config);
       camera.start();
 

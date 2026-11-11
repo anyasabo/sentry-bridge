@@ -8,7 +8,7 @@ SentryBridge is a thin translation layer: it speaks the PrusaLink HTTP API on on
 
 | Decision           | Choice                                      | Rationale                                                                                                                   |
 | ------------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Runtime            | Node.js 22 + TypeScript                     | Async I/O suits the polling + WebSocket workload; TypeScript provides type safety across module boundaries                  |
+| Runtime            | Node.js 26 + TypeScript                     | Async I/O suits the polling + WebSocket workload; TypeScript provides type safety across module boundaries                  |
 | Agent identity     | OctoPrint agent protocol (not Moonraker)    | OctoPrint identity is stable and well-documented; Moonraker identity unlocks Janus features that are experimental (ADR #46) |
 | Camera pipeline    | ffmpeg subprocess → JPEG extraction         | Proven RTSP→JPEG path; ffmpeg handles codec negotiation; no native Node.js RTSP library required                            |
 | Live stream        | Janus WebRTC gateway (bundled in container) | Obico control panel requires WebRTC for low-latency view; MJPEG alone is insufficient                                       |

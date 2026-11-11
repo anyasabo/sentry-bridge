@@ -3,7 +3,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/reneleban/sentry-bridge/ci.yml?branch=main&label=CI)](https://github.com/reneleban/sentry-bridge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Docker Image Version](https://img.shields.io/docker/v/rleban/sentry-bridge?label=Docker)](https://hub.docker.com/r/rleban/sentry-bridge)
-[![Node.js 22](https://img.shields.io/badge/Node.js-22-green.svg)](https://nodejs.org)
+[![Node.js 26](https://img.shields.io/badge/Node.js-26-green.svg)](https://nodejs.org)
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/reneleban/sentry-bridge?utm_source=oss&utm_medium=github&utm_campaign=reneleban%2Fsentry-bridge&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 
 Standalone Docker service that connects Prusa Core One printers (via PrusaLink) to Obico (self-hosted or cloud). Runs as an Obico agent — no modifications to Obico or PrusaLink required. One container = one printer.
@@ -264,7 +264,7 @@ For local development or custom builds:
 
 ### Prerequisites
 
-- Node.js 22+
+- Node.js 26+
 - ffmpeg
 - Docker Desktop (for Janus sidecar on Mac)
 
@@ -279,7 +279,7 @@ npm run install:all
 ### Run (dev)
 
 ```bash
-npm run dev:all          # backend (ts-node watch) + frontend (Vite)
+npm run dev:all          # backend (tsx watch) + frontend (Vite)
 ```
 
 Frontend proxies `/api/*` to the backend automatically.

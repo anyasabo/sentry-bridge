@@ -75,7 +75,7 @@ Express serves the compiled React frontend as static files under `/`, API routes
 npm run install:all
 
 # Dev mode
-npm run dev:backend          # ts-node watch mode (backend only)
+npm run dev:backend          # tsx watch mode (backend only)
 npm run dev:frontend         # Vite dev server (frontend only)
 npm run dev:all              # both in parallel
 

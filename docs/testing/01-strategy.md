@@ -31,7 +31,7 @@ This strategy covers testing for SentryBridge — the backend Node.js/TypeScript
 - ffmpeg process — mocked child process spawn
 - File system (`fs`) — mocked via `jest.mock('node:fs/promises')`
 
-**Framework:** Jest with ts-jest
+**Framework:** Jest with @swc/jest
 **Location:** `src/__tests__/*.test.ts`
 
 ### 2.2 Integration Tests
@@ -80,7 +80,7 @@ This strategy covers testing for SentryBridge — the backend Node.js/TypeScript
 | Tool               | Version | Purpose                                             |
 | ------------------ | ------- | --------------------------------------------------- |
 | Jest               | 29.x    | Test runner and assertion library                   |
-| ts-jest            | 29.x    | TypeScript transformer for Jest                     |
+| @swc/jest          | 0.2.x   | TypeScript transformer for Jest (no type checking)  |
 | @jest/globals      | 29.x    | Jest globals (describe, it, expect)                 |
 | jest-html-reporter | —       | HTML report generation (`reports/test-report.html`) |
 | jest-junit         | —       | JUnit XML output (`reports/junit.xml`) for CI       |

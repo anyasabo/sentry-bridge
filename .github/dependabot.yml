@@ -16,9 +16,6 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
-      # TypeScript 7 conflicts with peer ranges of ts-jest / react-i18next — see #58
-      - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/frontend"
@@ -27,9 +24,6 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
-      # TypeScript 7 conflicts with peer ranges of ts-jest / react-i18next — see #58
-      - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -14,15 +14,15 @@ Thank you for your interest in SentryBridge!
 
 ### Node.js Version
 
-This project requires Node.js 22 (same as the Docker image: `node:22-alpine`).
+This project requires Node.js 26 (same as the Docker image: `node:26-alpine`).
 
 Use [Volta](https://volta.sh) to pin the correct version automatically:
 
 ```bash
-volta install node@22
+volta install node@26
 ```
 
-Volta reads the `volta` field in `package.json` and switches Node.js automatically when you enter the project directory. Contributors without Volta should ensure `node --version` reports `v22.x.x` before running any commands.
+Volta reads the `volta` field in `package.json` and switches Node.js automatically when you enter the project directory. Contributors without Volta should ensure `node --version` reports `v26.x.x` before running any commands.
 
 See [README.md](README.md) for full setup instructions.
 

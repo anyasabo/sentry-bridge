@@ -35,7 +35,7 @@ const groups = [
       },
       {
         key: "dev:back",
-        desc: "Backend only (ts-node + nodemon)",
+        desc: "Backend only (tsx watch)",
         cmd: "npm run dev:backend",
       },
       {

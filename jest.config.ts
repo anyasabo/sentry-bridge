@@ -1,10 +1,18 @@
 import type { Config } from "jest";
 
 const config: Config = {
-  preset: "ts-jest",
   testEnvironment: "node",
   transform: {
-    "^.+\\.tsx?$": ["ts-jest", { tsconfig: "tsconfig.test.json" }],
+    "^.+\\.tsx?$": [
+      "@swc/jest",
+      {
+        jsc: {
+          parser: { syntax: "typescript" },
+          target: "es2020",
+        },
+        module: { type: "commonjs" },
+      },
+    ],
   },
   roots: ["<rootDir>/src"],
   testMatch: ["**/__tests__/**/*.test.ts"],
