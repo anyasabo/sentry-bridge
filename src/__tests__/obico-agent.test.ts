@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import * as http from "node:http";
+import { AddressInfo } from "node:net";
 import * as zlib from "node:zlib";
 import { BSON } from "bson";
 import { createObicoAgent } from "../obico/agent";
@@ -28,8 +29,8 @@ jest.mock("node:fs", () => ({
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
-function getPort(): number {
-  return 10000 + Math.floor(Math.random() * 5000);
+function boundPort(wss: WebSocketServer): number {
+  return (wss.address() as AddressInfo).port;
 }
 
 function mockResponse(status: number, body?: object): Response {
@@ -623,13 +624,15 @@ describe("WebSocket", () => {
   let serverSocket: WebSocket | null = null;
 
   beforeEach((done) => {
-    port = getPort();
     serverSocket = null;
-    wss = new WebSocketServer({ port });
+    wss = new WebSocketServer({ port: 0 });
     wss.on("connection", (ws) => {
       serverSocket = ws;
     });
-    wss.on("listening", done);
+    wss.on("listening", () => {
+      port = boundPort(wss);
+      done();
+    });
   });
 
   afterEach((done) => {
@@ -837,13 +840,15 @@ describe("Print passthru commands", () => {
   let serverSocket: WebSocket | null = null;
 
   beforeEach((done) => {
-    port = getPort();
     serverSocket = null;
-    wss = new WebSocketServer({ port });
+    wss = new WebSocketServer({ port: 0 });
     wss.on("connection", (ws) => {
       serverSocket = ws;
     });
-    wss.on("listening", done);
+    wss.on("listening", () => {
+      port = boundPort(wss);
+      done();
+    });
     jest.clearAllMocks();
   });
 
@@ -1288,9 +1293,11 @@ describe("http.tunnelv2 handler", () => {
   });
 
   beforeEach((done) => {
-    wsPort = getPort();
-    wss = new WebSocketServer({ port: wsPort });
-    wss.on("listening", done);
+    wss = new WebSocketServer({ port: 0 });
+    wss.on("listening", () => {
+      wsPort = boundPort(wss);
+      done();
+    });
     jest.clearAllMocks();
     lastRequest.method = undefined;
     lastRequest.url = undefined;
@@ -1520,9 +1527,11 @@ describe("FINISHING state handling", () => {
   let port: number;
 
   beforeEach((done) => {
-    port = getPort();
-    wss = new WebSocketServer({ port });
-    wss.on("listening", done);
+    wss = new WebSocketServer({ port: 0 });
+    wss.on("listening", () => {
+      port = boundPort(wss);
+      done();
+    });
     jest.clearAllMocks();
   });
 
@@ -1807,11 +1816,13 @@ describe("current_print_ts", () => {
   const sockets: WebSocket[] = [];
 
   beforeEach((done) => {
-    port = getPort();
     sockets.length = 0;
-    wss = new WebSocketServer({ port });
+    wss = new WebSocketServer({ port: 0 });
     wss.on("connection", (ws) => sockets.push(ws));
-    wss.on("listening", done);
+    wss.on("listening", () => {
+      port = boundPort(wss);
+      done();
+    });
   });
 
   afterEach((done) => {

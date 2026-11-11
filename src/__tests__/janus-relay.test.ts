@@ -1,8 +1,9 @@
 import { WebSocketServer, WebSocket } from "ws";
+import { AddressInfo } from "node:net";
 import { createJanusRelay } from "../janus/relay";
 
-function getPort(): number {
-  return 20000 + Math.floor(Math.random() * 5000);
+function boundPort(wss: WebSocketServer): number {
+  return (wss.address() as AddressInfo).port;
 }
 
 describe("createJanusRelay()", () => {
@@ -12,13 +13,15 @@ describe("createJanusRelay()", () => {
   let obicoPort: number;
 
   beforeEach((done) => {
-    janusPort = getPort();
-    obicoPort = getPort();
-    janusWss = new WebSocketServer({ port: janusPort });
-    obicoWss = new WebSocketServer({ port: obicoPort });
+    janusWss = new WebSocketServer({ port: 0 });
+    obicoWss = new WebSocketServer({ port: 0 });
     let ready = 0;
     const onListening = () => {
-      if (++ready === 2) done();
+      if (++ready === 2) {
+        janusPort = boundPort(janusWss);
+        obicoPort = boundPort(obicoWss);
+        done();
+      }
     };
     janusWss.on("listening", onListening);
     obicoWss.on("listening", onListening);
