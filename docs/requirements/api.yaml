@@ -116,7 +116,9 @@ paths:
       description: >-
         Returns the current config.json contents with secrets removed: the PrusaLink
         password and the Obico API key are replaced by `passwordHint` / `apiKeyHint`
-        ("***" plus the last 3 characters for secrets of 8+ characters, otherwise "***").
+        ("***" when a secret is stored, "" otherwise). Credentials in `camera.rtspUrl`
+        are replaced by `***` (`rtsp://***@host/live`); sending that URL back on save
+        keeps the stored credentials for the same host and path.
         Returns 404 if not yet configured.
       operationId: getConfig
       responses:
@@ -688,7 +690,7 @@ components:
               $ref: "#/components/schemas/Config/properties/prusalink/properties/username"
             passwordHint:
               type: string
-              example: "***ord"
+              example: "***"
         camera:
           $ref: "#/components/schemas/Config/properties/camera"
         obico:
@@ -698,7 +700,7 @@ components:
               $ref: "#/components/schemas/Config/properties/obico/properties/serverUrl"
             apiKeyHint:
               type: string
-              example: "***0f1"
+              example: "***"
         polling:
           $ref: "#/components/schemas/Config/properties/polling"
         shutdown:

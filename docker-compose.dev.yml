@@ -11,12 +11,12 @@ services:
     container_name: prubico_janus
     platform: linux/amd64
     ports:
-      - "8088:8088" # Janus HTTP REST API (dev/debug only)
-      - "8188:8188" # Janus WebSocket (bridge → Janus signaling)
+      - "127.0.0.1:8088:8088" # Janus HTTP REST API (dev/debug only)
+      - "127.0.0.1:8188:8188" # Janus WebSocket (bridge → Janus signaling), host loopback only
       - "17732:17732/udp" # RTP video from ffmpeg
       - "10100-10200:10100-10200/udp" # WebRTC ICE media (browser ↔ Janus)
     volumes:
       - ./config/janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
       - ./config/janus/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro
-      - ./config/janus/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro
+      - ./config/janus-dev/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro
     restart: unless-stopped

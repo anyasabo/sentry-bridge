@@ -1,0 +1,10 @@
+# Dev sidecar only (docker-compose.dev.yml). Unlike the bundled config, Janus must
+# listen on all container interfaces here: the bridge on the host reaches it
+# through Docker's port mapping, which arrives on the container's eth0, not on
+# loopback. The host side of the mapping is bound to 127.0.0.1 in the compose file.
+general: {
+	json = "indented"
+	ws = true
+	ws_port = 8188
+	wss = false
+}

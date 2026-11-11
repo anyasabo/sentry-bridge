@@ -2,5 +2,8 @@ general: {
 	json = "indented"
 	ws = true
 	ws_port = 8188
+	# Only the bridge in this container talks to this socket: bind to loopback.
+	ws_ip = "127.0.0.1"
 	wss = false
+	# The admin API over WebSockets stays off (admin_ws defaults to false).
 }

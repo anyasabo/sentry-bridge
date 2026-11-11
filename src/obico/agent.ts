@@ -165,7 +165,12 @@ export function createObicoAgent(
               logParseErrorOnce(isBinary, err);
               return;
             }
-            if (!isBinary) console.log("[obico] ← received:", data.toString());
+            // Bodies can carry signed download URLs and Janus signaling: log keys only.
+            if (!isBinary)
+              console.log(
+                "[obico] ← received keys:",
+                Object.keys(msg).join(",")
+              );
             if (msg.passthru) handlePassthru(msg.passthru);
             if (Array.isArray(msg.commands)) handleCommands(msg.commands);
             // Obico also sends {"janus": null}; only string payloads are Janus JSON.

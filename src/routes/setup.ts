@@ -1,4 +1,5 @@
 import { Config, saveConfig, tryLoadConfig } from "../config/config";
+import { assertRtspUrl, RtspUrlError } from "../config/rtsp";
 import { mergeStoredSecrets } from "../config/secrets";
 import { startBridge } from "../bridge";
 
@@ -14,6 +15,12 @@ export function resolveSetup(body: Partial<Config>): Config {
     !merged.obico?.apiKey
   ) {
     throw new SetupError("All config fields are required");
+  }
+  try {
+    assertRtspUrl(merged.camera.rtspUrl);
+  } catch (err) {
+    if (err instanceof RtspUrlError) throw new SetupError(err.message);
+    throw err;
   }
   return {
     name: merged.name || undefined,

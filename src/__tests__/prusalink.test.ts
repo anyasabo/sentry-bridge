@@ -106,8 +106,8 @@ describe("PrusaLinkClient", () => {
     });
   });
 
-  describe("getJob() diagnostic logging", () => {
-    it("logs top-level keys once per state change", async () => {
+  describe("getJob() logging", () => {
+    it("does not log job body details", async () => {
       const consoleSpy = jest
         .spyOn(console, "log")
         .mockImplementation(() => {});
@@ -115,33 +115,7 @@ describe("PrusaLinkClient", () => {
         mockFetch.mockResolvedValue(mockResponse(200, jobBody));
         const client = createPrusaLinkClient(config, fetcher);
         await client.getJob();
-        await client.getJob();
-        const getJobKeysCalls = consoleSpy.mock.calls.filter((args) =>
-          String(args[0]).includes("getJob keys")
-        );
-        expect(getJobKeysCalls).toHaveLength(1);
-      } finally {
-        consoleSpy.mockRestore();
-      }
-    });
-
-    it("logs again when state changes", async () => {
-      const consoleSpy = jest
-        .spyOn(console, "log")
-        .mockImplementation(() => {});
-      try {
-        const printingBody = { ...jobBody, state: "PRINTING" };
-        const finishedBody = { ...jobBody, state: "FINISHED" };
-        // New client instance — fresh lastLoggedJobState
-        const client = createPrusaLinkClient(config, fetcher);
-        mockFetch.mockResolvedValueOnce(mockResponse(200, printingBody));
-        await client.getJob();
-        mockFetch.mockResolvedValueOnce(mockResponse(200, finishedBody));
-        await client.getJob();
-        const getJobKeysCalls = consoleSpy.mock.calls.filter((args) =>
-          String(args[0]).includes("getJob keys")
-        );
-        expect(getJobKeysCalls).toHaveLength(2);
+        expect(consoleSpy).not.toHaveBeenCalled();
       } finally {
         consoleSpy.mockRestore();
       }

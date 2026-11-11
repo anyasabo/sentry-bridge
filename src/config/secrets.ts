@@ -1,8 +1,9 @@
 import { Config } from "./config";
+import { isRedactedRtspUrl, redactRtspUrl, sameRtspTarget } from "./rtsp";
 
-/** Shows which secret is stored without revealing it: "***" + last 3 chars for secrets of 8+ chars. */
+/** Shows whether a secret is stored, without revealing any of it: "***" or "". */
 export function secretHint(secret: string): string {
-  return secret.length >= 8 ? `***${secret.slice(-3)}` : "***";
+  return secret ? "***" : "";
 }
 
 export type PublicConfig = Omit<Config, "prusalink" | "obico"> & {
@@ -16,6 +17,7 @@ export function toPublicConfig(config: Config): PublicConfig {
   const { apiKey, ...obico } = config.obico;
   return {
     ...config,
+    camera: { ...config.camera, rtspUrl: redactRtspUrl(config.camera.rtspUrl) },
     prusalink: { ...prusalink, passwordHint: secretHint(password ?? "") },
     obico: { ...obico, apiKeyHint: secretHint(apiKey ?? "") },
   };
@@ -24,6 +26,7 @@ export function toPublicConfig(config: Config): PublicConfig {
 export interface IncomingSecrets {
   prusalink?: { url?: string; username?: string; password?: string };
   obico?: { serverUrl?: string; apiKey?: string };
+  camera?: { rtspUrl?: string };
 }
 
 /** A secret was left empty but the stored one belongs to a different target. */
@@ -37,7 +40,8 @@ function sameUrl(a?: string, b?: string): boolean {
  * Fills empty secrets from the stored config (the UI never receives them).
  * A stored secret is only reused for the target it was stored for: the
  * PrusaLink password for the same URL and username, the Obico API key for the
- * same server URL. Otherwise sending it elsewhere would leak it, so this
+ * same server URL, the camera credentials (a redacted RTSP URL, as returned by
+ * the API) for the same host and path. Otherwise sending it elsewhere would leak it, so this
  * throws SecretFallbackError. Returns a new object; `incoming` is not changed.
  */
 export function mergeStoredSecrets<T extends IncomingSecrets>(
@@ -65,6 +69,15 @@ export function mergeStoredSecrets<T extends IncomingSecrets>(
       );
     }
     merged.obico = { ...ob, apiKey: stored.obico.apiKey };
+  }
+  const cam = incoming.camera;
+  if (cam?.rtspUrl && isRedactedRtspUrl(cam.rtspUrl)) {
+    if (!stored || !sameRtspTarget(cam.rtspUrl, stored.camera.rtspUrl)) {
+      throw new SecretFallbackError(
+        "Camera credentials are required when the camera host or path changes"
+      );
+    }
+    merged.camera = { ...cam, rtspUrl: stored.camera.rtspUrl };
   }
   return merged;
 }

@@ -1,7 +1,6 @@
 general: {
 	log_to_stdout = true
 	debug_level = 4
-	admin_secret = "janusoverlord"
 	ignore_unreachable_ice_server = true
 }
 

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { createPrusaLinkClient } from "../prusalink/client";
 import { createCamera } from "../camera/camera";
 import { Config, isConfigured, tryLoadConfig } from "../config/config";
+import { assertRtspUrl, RtspUrlError } from "../config/rtsp";
 import { mergeStoredSecrets, SecretFallbackError } from "../config/secrets";
 import { resolveSetup, saveSetup, SetupError } from "./setup";
 import { createObicoAgent } from "../obico/agent";
@@ -55,11 +56,24 @@ router.post("/test-prusalink", async (req, res) => {
 });
 
 router.post("/test-camera", async (req, res) => {
-  const { rtspUrl } = req.body as { rtspUrl?: string };
+  const body = req.body as { rtspUrl?: string };
 
-  if (!rtspUrl) {
+  if (!body.rtspUrl) {
     res.status(400).json({ message: "rtspUrl is required" });
     return;
+  }
+  let rtspUrl: string;
+  try {
+    rtspUrl =
+      mergeStoredSecrets({ camera: body }, tryLoadConfig()).camera?.rtspUrl ??
+      body.rtspUrl;
+    assertRtspUrl(rtspUrl);
+  } catch (err) {
+    if (err instanceof SecretFallbackError || err instanceof RtspUrlError) {
+      res.status(400).json({ message: err.message });
+      return;
+    }
+    throw err;
   }
 
   const camera = createCamera({ rtspUrl, frameIntervalSeconds: 10 });

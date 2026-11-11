@@ -21,7 +21,14 @@ jest.mock("../obico/agent", () => ({
   createObicoAgent: jest.fn(() => ({ waitForPairing: mockWaitForPairing })),
 }));
 
+const mockTestStream = jest.fn();
+jest.mock("../camera/camera", () => ({
+  ...jest.requireActual("../camera/camera"),
+  createCamera: jest.fn(() => ({ testStream: mockTestStream })),
+}));
+
 import { app } from "../server";
+import { createCamera } from "../camera/camera";
 import { createPrusaLinkClient } from "../prusalink/client";
 
 const PASSWORD = "printer-secret-xyz";
@@ -68,26 +75,44 @@ describe("GET /api/config", () => {
     expect(res.body.obico.apiKey).toBeUndefined();
   });
 
-  it("returns *** plus the last 3 chars for secrets of 8 or more chars", async () => {
+  it("returns only *** for a stored secret, never characters of it", async () => {
     writeStored({
       ...stored,
       prusalink: { ...stored.prusalink, password: "12345678" },
       obico: { ...stored.obico, apiKey: "abcdefghijk" },
     });
     const res = await request(app).get("/api/config");
-    expect(res.body.prusalink.passwordHint).toBe("***678");
-    expect(res.body.obico.apiKeyHint).toBe("***ijk");
-  });
-
-  it("returns only *** for secrets shorter than 8 chars", async () => {
-    writeStored({
-      ...stored,
-      prusalink: { ...stored.prusalink, password: "1234567" },
-      obico: { ...stored.obico, apiKey: "abc" },
-    });
-    const res = await request(app).get("/api/config");
     expect(res.body.prusalink.passwordHint).toBe("***");
     expect(res.body.obico.apiKeyHint).toBe("***");
+    expect(res.text).not.toContain("678");
+    expect(res.text).not.toContain("ijk");
+  });
+
+  it("returns an empty hint when no secret is stored", async () => {
+    writeStored({
+      ...stored,
+      prusalink: { ...stored.prusalink, password: "" },
+      obico: { ...stored.obico, apiKey: "" },
+    });
+    const res = await request(app).get("/api/config");
+    expect(res.body.prusalink.passwordHint).toBe("");
+    expect(res.body.obico.apiKeyHint).toBe("");
+  });
+
+  it("redacts credentials in the RTSP URL", async () => {
+    writeStored({
+      ...stored,
+      camera: { ...stored.camera, rtspUrl: "rtsp://cam:hunter2@printer/live" },
+    });
+    const res = await request(app).get("/api/config");
+    expect(res.text).not.toContain("hunter2");
+    expect(res.text).not.toContain("cam:");
+    expect(res.body.camera.rtspUrl).toBe("rtsp://***@printer/live");
+  });
+
+  it("leaves an RTSP URL without credentials unchanged", async () => {
+    const res = await request(app).get("/api/config");
+    expect(res.body.camera.rtspUrl).toBe("rtsp://printer/live");
   });
 
   it("keeps the non-secret fields", async () => {
@@ -187,6 +212,101 @@ describe("POST /api/setup/save", () => {
     fs.rmSync(file);
     const res = await request(app).post("/api/setup/save").send(body);
     expect(res.status).toBe(400);
+  });
+});
+
+describe("RTSP URL credentials and scheme", () => {
+  const credUrl = "rtsp://cam:hunter2@printer/live";
+  const redacted = "rtsp://***@printer/live";
+  const body = {
+    prusalink: { url: "http://printer", username: "maker", password: "" },
+    camera: { rtspUrl: redacted, frameIntervalSeconds: 10 },
+    obico: { serverUrl: "http://obico", apiKey: "" },
+  };
+
+  beforeEach(() => {
+    writeStored({ ...stored, camera: { ...stored.camera, rtspUrl: credUrl } });
+  });
+
+  it("keeps the stored credentials when the redacted URL comes back", async () => {
+    const res = await request(app).post("/api/setup/save").send(body);
+    expect(res.status).toBe(200);
+    expect(readStored().camera.rtspUrl).toBe(credUrl);
+  });
+
+  it("refuses the redacted URL when host or path changed", async () => {
+    const res = await request(app)
+      .post("/api/setup/save")
+      .send({
+        ...body,
+        camera: { rtspUrl: "rtsp://***@other/live", frameIntervalSeconds: 10 },
+      });
+    expect(res.status).toBe(400);
+    expect(readStored().camera.rtspUrl).toBe(credUrl);
+  });
+
+  it("refuses the redacted URL when nothing is stored", async () => {
+    fs.rmSync(file);
+    const res = await request(app).post("/api/setup/save").send(body);
+    expect(res.status).toBe(400);
+  });
+
+  it("stores a new URL with new credentials as sent", async () => {
+    const res = await request(app)
+      .post("/api/setup/save")
+      .send({
+        ...body,
+        camera: {
+          rtspUrl: "rtsp://u:p@printer/live",
+          frameIntervalSeconds: 10,
+        },
+      });
+    expect(res.status).toBe(200);
+    expect(readStored().camera.rtspUrl).toBe("rtsp://u:p@printer/live");
+  });
+
+  it.each([
+    "http://printer/live",
+    "file:///etc/passwd",
+    "/etc/passwd",
+    "-f lavfi",
+    "concat:a|b",
+  ])("rejects %s on save", async (rtspUrl) => {
+    const res = await request(app)
+      .post("/api/setup/save")
+      .send({ ...body, camera: { rtspUrl, frameIntervalSeconds: 10 } });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/rtsp/i);
+    expect(readStored().camera.rtspUrl).toBe(credUrl);
+  });
+
+  it("accepts rtsps:// on save", async () => {
+    const res = await request(app)
+      .post("/api/setup/save")
+      .send({
+        ...body,
+        camera: { rtspUrl: "rtsps://printer/live", frameIntervalSeconds: 10 },
+      });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a non-RTSP scheme on /api/wizard/test-camera", async () => {
+    const res = await request(app)
+      .post("/api/wizard/test-camera")
+      .send({ rtspUrl: "http://printer/live" });
+    expect(res.status).toBe(400);
+    expect(createCamera).not.toHaveBeenCalled();
+  });
+
+  it("uses the stored credentials for the redacted URL on test-camera", async () => {
+    mockTestStream.mockResolvedValue(Buffer.from("x"));
+    const res = await request(app)
+      .post("/api/wizard/test-camera")
+      .send({ rtspUrl: redacted });
+    expect(res.status).toBe(200);
+    expect(createCamera).toHaveBeenCalledWith(
+      expect.objectContaining({ rtspUrl: credUrl })
+    );
   });
 });
 

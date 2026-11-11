@@ -554,6 +554,32 @@ describe("WebSocket", () => {
     });
   });
 
+  it("logs only the keys of received messages, not their content", (done) => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+    const agent = createObicoAgent(
+      { serverUrl: `http://localhost:${port}`, apiKey: "key" },
+      mockHttp,
+      mockDispatcher
+    );
+    wss.on("connection", (ws) => {
+      ws.send(JSON.stringify({ passthru: { ref: "r", secret_marker: "tok" } }));
+      setTimeout(() => {
+        const logged = logSpy.mock.calls.map((c) => c.join(" ")).join("\n");
+        logSpy.mockRestore();
+        agent.disconnect();
+        try {
+          expect(logged).toContain("passthru");
+          expect(logged).not.toContain("secret_marker");
+          expect(logged).not.toContain("tok");
+          done();
+        } catch (e) {
+          done(e);
+        }
+      }, 100);
+    });
+    agent.connect();
+  });
+
   it("dispatches pause command to PrusaLink dispatcher", (done) => {
     const config: ObicoAgentConfig = {
       serverUrl: `http://localhost:${port}`,
