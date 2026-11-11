@@ -106,14 +106,15 @@ All API routes return `{ message: string }` on errors. HTTP status codes follow 
 
 SentryBridge uses `console.log` / `console.error` with structured prefixes:
 
-| Prefix        | Module                |
-| ------------- | --------------------- |
-| `[bridge]`    | Bridge Orchestrator   |
-| `[prusalink]` | PrusaLink Client      |
-| `[camera]`    | Camera Module         |
-| `[obico]`     | Obico Agent           |
-| `[janus]`     | Janus Manager / Relay |
-| `[health]`    | Health Monitor        |
+| Prefix          | Module              |
+| --------------- | ------------------- |
+| `[bridge]`      | Bridge Orchestrator |
+| `[prusalink]`   | PrusaLink Client    |
+| `[camera]`      | Camera Module       |
+| `[obico]`       | Obico Agent         |
+| `[janus]`       | Janus Manager       |
+| `[janus-relay]` | Janus Relay         |
+| `[health]`      | Health Monitor      |
 
 All output goes to stdout/stderr and is available via `docker logs`. No log rotation or structured JSON logging in the current version.
 

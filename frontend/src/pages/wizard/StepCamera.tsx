@@ -8,7 +8,12 @@ import {
   Image,
   Skeleton,
 } from "@mantine/core";
-import { IconCamera, IconCheck, IconX } from "@tabler/icons-react";
+import {
+  IconCamera,
+  IconCheck,
+  IconInfoCircle,
+  IconX,
+} from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useWizard } from "./WizardContext";
 
@@ -74,9 +79,18 @@ export function StepCamera() {
       )}
       {status === "error" && (
         <Alert color="red" icon={<IconX size={16} />}>
-          {errorMsg}
+          <Text size="sm">{errorMsg}</Text>
         </Alert>
       )}
+      {/* Emphasised when the test failed, a dimmed tip otherwise. */}
+      <Text
+        size={status === "error" ? "sm" : "xs"}
+        fw={status === "error" ? 600 : undefined}
+        c={status === "error" ? undefined : "dimmed"}
+      >
+        <IconInfoCircle size={12} style={{ verticalAlign: "middle" }} />{" "}
+        {t("wizard.camera.rtsp_hint")}
+      </Text>
       {status === "testing" && <Skeleton height={180} radius="md" />}
       {previewUrl && (
         <Image src={previewUrl} alt={t("wizard.camera.preview")} radius="md" />

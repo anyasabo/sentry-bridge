@@ -79,4 +79,32 @@ describe("Janus signaling passthrough", () => {
       '{"janus":"keepalive","n":2}',
     ]);
   });
+  it("ignores null and non-string janus payloads", async () => {
+    const janusConnections: WebSocket[] = [];
+    const received: string[] = [];
+    janus.on("connection", (socket) => {
+      janusConnections.push(socket);
+      socket.on("message", (data) => received.push(data.toString()));
+    });
+    obico.on("connection", (socket) => {
+      socket.send(JSON.stringify({ janus: null }));
+      socket.send(JSON.stringify({ janus: { janus: "keepalive" } }));
+      socket.send(JSON.stringify({ janus: 42 }));
+      socket.send(JSON.stringify({ janus: '{"janus":"keepalive","n":1}' }));
+    });
+
+    const agent = createObicoAgent(
+      { serverUrl: `http://localhost:${portOf(obico)}`, apiKey: "key" },
+      { fetch: jest.fn() },
+      dispatcher
+    );
+    agent.setJanusUrl(`ws://localhost:${portOf(janus)}`);
+    agent.connect();
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    agent.disconnect();
+
+    expect(janusConnections).toHaveLength(1);
+    expect(received).toEqual(['{"janus":"keepalive","n":1}']);
+  });
 });

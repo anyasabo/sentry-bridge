@@ -147,7 +147,9 @@ export function createObicoAgent(
               const msg = JSON.parse(data.toString()) as any;
               if (msg.passthru) handlePassthru(msg.passthru);
               if (Array.isArray(msg.commands)) handleCommands(msg.commands);
-              if (msg.janus) handleJanus(msg.janus);
+              // Obico also sends {"janus": null}; only string payloads are Janus JSON.
+              if (typeof msg.janus === "string" && msg.janus)
+                handleJanus(msg.janus);
               if (msg["http.tunnelv2"]) {
                 handleHttpTunnel(msg["http.tunnelv2"]).catch((e) =>
                   console.error("[obico] handleHttpTunnel failed:", e)

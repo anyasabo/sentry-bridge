@@ -172,6 +172,7 @@ These are intentional product decisions, not bugs:
 
 - Symptom: Wizard step 2 blocks, no frame preview
 - Confirm printer has a camera (Buddy3D board) and RTSP is enabled
+- In Prusa Connect, open the printer details → **Camera** → camera settings and set the field **Streaming** to **RTSP** (options: Disable / RTSP / WebRTC). Re-check after every firmware update — newer firmware may switch it back to WebRTC
 - Test from host: `ffmpeg -rtsp_transport tcp -i rtsp://<printer-ip>/live -frames:v 1 -f image2 test.jpg`
 - Check LAN: printer and Docker host on the same subnet, no VLAN isolation
 
@@ -189,6 +190,12 @@ These are intentional product decisions, not bugs:
 - Confirm UDP ports `10100-10200` are published and reachable from the browser
 - Test: `docker exec <container> env | grep JANUS_HOST_IP`
 - Restart after change: `docker compose up -d --force-recreate`
+
+### 5. Obico live view stays black after a bridge restart
+
+- Symptom: after the bridge container restarts (the bundled Janus restarts with it), an Obico live view that was already open stays black
+- Reload the Obico page — the web client does not re-establish the WebRTC session on its own; this is how [Obico's web client](https://github.com/TheSpaghettiDetective/obico-server/blob/release/frontend/src/lib/webrtc.js) behaves with the official agents too
+- The dashboard MJPEG view is not affected
 
 ## Building from Source
 
