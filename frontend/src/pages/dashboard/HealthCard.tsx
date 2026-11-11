@@ -24,6 +24,7 @@ import {
   type ComponentStats,
   type ReconnectTarget,
 } from "../../hooks/useHealth";
+import classes from "./HealthCard.module.css";
 
 // ---------- Shared helpers ----------
 
@@ -297,43 +298,55 @@ function HealthRow({
 
 export function HealthCard() {
   const { t } = useTranslation();
-  const { health, isStale, secondsSinceLastFetch, reconnecting, reconnect } =
-    useHealth();
+  const {
+    health,
+    isStale,
+    secondsSinceLastFetch,
+    fetchCount,
+    reconnecting,
+    reconnect,
+  } = useHealth();
 
   const overall: HealthState = health?.overall ?? "recovering";
   const overallColor = stateColor(overall);
 
-  const timestampText =
+  const staleText =
     secondsSinceLastFetch >= 60
-      ? t("dashboard.health.last_checked_minutes", {
+      ? t("dashboard.health.stale_minutes", {
           n: Math.floor(secondsSinceLastFetch / 60),
         })
-      : t("dashboard.health.last_checked", { n: secondsSinceLastFetch });
-  const staleText = t("dashboard.health.stale", { n: secondsSinceLastFetch });
+      : t("dashboard.health.stale", { n: secondsSinceLastFetch });
 
   return (
     <Card withBorder radius="md" p="md">
       <Group justify="space-between" mb="xs">
         <Title order={5}>{t("dashboard.health.heading")}</Title>
-        <Group gap="xs">
-          {health && (
-            <Badge color={overallColor} variant="light">
+        {health ? (
+          isStale ? (
+            <Badge
+              color="gray"
+              variant="outline"
+              leftSection={<IconAlertTriangle size={12} />}
+            >
+              {staleText}
+            </Badge>
+          ) : (
+            <Badge
+              color={overallColor}
+              variant="light"
+              leftSection={
+                // key restarts the pulse animation on every received response
+                <span key={fetchCount} className={classes.dot} aria-hidden />
+              }
+            >
               {t(`dashboard.health.overall.${overall}`)}
             </Badge>
-          )}
-          {isStale ? (
-            <Group gap={4}>
-              <IconAlertTriangle size={12} color="var(--mantine-color-red-6)" />
-              <Text size="xs" c="red">
-                {staleText}
-              </Text>
-            </Group>
-          ) : (
-            <Text size="xs" c="dimmed">
-              {health ? timestampText : t("dashboard.health.loading")}
-            </Text>
-          )}
-        </Group>
+          )
+        ) : (
+          <Text size="xs" c="dimmed">
+            {t("dashboard.health.loading")}
+          </Text>
+        )}
       </Group>
 
       <Stack gap="xs" style={{ opacity: isStale ? 0.5 : 1 }}>

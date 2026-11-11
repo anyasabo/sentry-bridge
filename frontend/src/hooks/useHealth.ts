@@ -38,19 +38,22 @@ export type ReconnectTarget = "prusalink" | "obico" | "camera";
 export interface UseHealthReturn {
   health: HealthResponse | null;
   lastFetchTime: number | null;
+  /** Increments on every received health response; drives the badge pulse. */
+  fetchCount: number;
   isStale: boolean;
   secondsSinceLastFetch: number;
   reconnecting: Partial<Record<ReconnectTarget, boolean>>;
   reconnect: (component: ReconnectTarget) => Promise<void>;
 }
 
-const FETCH_INTERVAL_MS = 10_000;   // D-09
-const STALE_THRESHOLD_MS = 30_000;  // D-14
-const TIMESTAMP_TICK_MS = 1_000;    // D-15
+const FETCH_INTERVAL_MS = 10_000; // D-09
+const STALE_THRESHOLD_MS = 30_000; // D-14
+const STALE_TICK_MS = 1_000; // per-second tick, only while stale
 
 export function useHealth(): UseHealthReturn {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [lastFetchTime, setLastFetchTime] = useState<number | null>(null);
+  const [fetchCount, setFetchCount] = useState(0);
   const [now, setNow] = useState<number>(Date.now());
   const [reconnecting, setReconnecting] = useState<
     Partial<Record<ReconnectTarget, boolean>>
@@ -65,7 +68,10 @@ export function useHealth(): UseHealthReturn {
       if (!res.ok) return;
       const data = (await res.json()) as HealthResponse;
       setHealth(data);
-      setLastFetchTime(Date.now());
+      const receivedAt = Date.now();
+      setLastFetchTime(receivedAt);
+      setNow(receivedAt);
+      setFetchCount((n) => n + 1);
     } catch {
       // swallow — keep last known state visible
     }
@@ -105,11 +111,16 @@ export function useHealth(): UseHealthReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Effect 2: 1-second tick for timestamp display (independent of fetch interval — D-15)
+  // Effect 2: no re-render while fresh; wake up once at the stale threshold,
+  // then tick every second so the stale age stays current.
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), TIMESTAMP_TICK_MS);
-    return () => clearInterval(id);
-  }, []);
+    if (lastFetchTime === null) return;
+    const age = Date.now() - lastFetchTime;
+    const delay =
+      age < STALE_THRESHOLD_MS ? STALE_THRESHOLD_MS - age : STALE_TICK_MS;
+    const id = setTimeout(() => setNow(Date.now()), delay);
+    return () => clearTimeout(id);
+  }, [lastFetchTime, now]);
 
   // Reconnect: POST, trigger immediate fetch, clear spinner in finally (Pitfall 3)
   const reconnect = useCallback(
@@ -137,6 +148,7 @@ export function useHealth(): UseHealthReturn {
   return {
     health,
     lastFetchTime,
+    fetchCount,
     isStale,
     secondsSinceLastFetch,
     reconnecting,
