@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- Requests with an unknown `Host` header are rejected (403). **BREAKING:** access through a DNS name containing a dot (reverse proxy, Tailscale MagicDNS, `*.fritz.box`) requires the name in the new `ALLOWED_HOSTS` environment variable; IP addresses, `localhost`, single-label and `*.local` names keep working. (#93)
+- Cross-site write requests (`POST`/`PUT`/`DELETE` whose `Origin` does not match `Host`) are rejected (403); a reverse proxy must pass the original `Host` header through. (#93)
+- `GET /api/config` no longer returns RTSP credentials or characters of stored secrets. (#91)
+- Camera URLs must use `rtsp://` or `rtsps://`. (#91)
+- `config.json` is written with mode `0600`. (#91)
+- The bundled Janus WebSocket listens on loopback only; the default Janus admin secret was removed. (#91)
+- Obico messages are logged by key only, not with their content. (#91)
+
+### Changed
+
+- **BREAKING: published ports are bound to the host LAN IP.** `docker-compose.yml`, the README, and the docs now publish the web port and the Janus UDP range as `${JANUS_HOST_IP}:<port>` instead of on all interfaces. `JANUS_HOST_IP` is now required: `docker compose up` fails with an error if it is unset or empty, and `docker run` examples use `-p <LAN-IP>:3000:3000`. Existing setups must set `JANUS_HOST_IP` (e.g. in `.env`) before upgrading their compose file, and open the UI at `http://<JANUS_HOST_IP>:3000` instead of `http://localhost:3000`. (#90)
+- Docker image builds use `npm ci`; GitHub Actions are pinned to commit SHAs and updated by Dependabot. (#92)
+
+### Added
+
+- `SECURITY.md` with the supported deployment (private LAN or VPN), trust assumptions, and how to report vulnerabilities (#90)
+- Warning that the bridge has no authentication in the README, quickstart, and Docker Compose guide, and a startup log line stating it (#90)
+- Note that Docker-published ports bypass host firewalls such as `ufw` (#90)
+
+### Fixed
+
+- README no longer claims the bridge offers no file upload (`POST /api/files/upload`) (#90)
+
+### Planned — Milestone 3
+
+- Print passthru — start print from Obico UI (#47)
+- G-code file browser — PrusaLink files in Obico UI (#48)
+
+---
+
 ## [1.1.0] - 2026-04-13
 
 Milestone 3: Print & Files (Phases 13–15)
@@ -70,26 +104,3 @@ First production-ready release. Covers Milestone 1 (Working Bridge) and Mileston
 - **Dashboard** — printer status, job progress, print controls
 - **Docker image** — single image with ffmpeg, multi-platform build (amd64 + arm64), Docker Hub CI/CD via GitHub Actions
 - 128 backend unit tests
-
----
-
-## [Unreleased]
-
-### Changed
-
-- **BREAKING: published ports are bound to the host LAN IP.** `docker-compose.yml`, the README, and the docs now publish the web port and the Janus UDP range as `${JANUS_HOST_IP}:<port>` instead of on all interfaces. `JANUS_HOST_IP` is now required: `docker compose up` fails with an error if it is unset or empty, and `docker run` examples use `-p <LAN-IP>:3000:3000`. Existing setups must set `JANUS_HOST_IP` (e.g. in `.env`) before upgrading their compose file, and open the UI at `http://<JANUS_HOST_IP>:3000` instead of `http://localhost:3000`. (#90)
-
-### Added
-
-- `SECURITY.md` with the supported deployment (private LAN or VPN), trust assumptions, and how to report vulnerabilities (#90)
-- Warning that the bridge has no authentication in the README, quickstart, and Docker Compose guide, and a startup log line stating it (#90)
-- Note that Docker-published ports bypass host firewalls such as `ufw` (#90)
-
-### Fixed
-
-- README no longer claims the bridge offers no file upload (`POST /api/files/upload`) (#90)
-
-### Planned — Milestone 3
-
-- Print passthru — start print from Obico UI (#47)
-- G-code file browser — PrusaLink files in Obico UI (#48)
