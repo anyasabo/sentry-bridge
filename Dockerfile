@@ -2,7 +2,7 @@
 FROM node:22-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
@@ -10,7 +10,7 @@ RUN npm run build
 FROM node:22-alpine AS backend-build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build:backend
@@ -23,7 +23,7 @@ RUN apk add --no-cache ffmpeg janus-gateway
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --omit=dev --ignore-scripts
+RUN npm ci --omit=dev --ignore-scripts
 COPY --from=backend-build /app/dist ./dist
 COPY --from=frontend-build /app/frontend/dist ./public
 COPY config/janus ./config/janus
