@@ -169,6 +169,51 @@ describe("Camera", () => {
     });
   });
 
+  describe("subscribe()", () => {
+    it("ends every subscription on stop()", () => {
+      mockSpawn.mockReturnValue(makeMockProcess({}));
+      const camera = createCamera(config);
+      camera.start();
+      const onEnd = jest.fn();
+      camera.subscribe(Symbol("a"), { onFrame: jest.fn(), onEnd: onEnd });
+      camera.stop();
+      expect(onEnd).toHaveBeenCalledTimes(1);
+    });
+
+    it("ends every subscription on stopGracefully()", async () => {
+      mockSpawn.mockReturnValue(makeMockProcess({}));
+      const camera = createCamera(config);
+      const onEnd = jest.fn();
+      camera.subscribe(Symbol("a"), { onFrame: jest.fn(), onEnd: onEnd });
+      await camera.stopGracefully(10);
+      expect(onEnd).toHaveBeenCalledTimes(1);
+    });
+
+    it("delivers no frames to an ended subscription", () => {
+      const proc = makeMockProcess({});
+      mockSpawn.mockReturnValue(proc);
+      const camera = createCamera(config);
+      const onFrame = jest.fn();
+      camera.subscribe(Symbol("a"), { onFrame, onEnd: jest.fn() });
+      camera.stop();
+      camera.start();
+      proc.stdout!.emit("data", fakeJpeg);
+      expect(onFrame).not.toHaveBeenCalled();
+      camera.stop();
+    });
+
+    it("does not end a subscription that was removed", () => {
+      mockSpawn.mockReturnValue(makeMockProcess({}));
+      const camera = createCamera(config);
+      const id = Symbol("a");
+      const onEnd = jest.fn();
+      camera.subscribe(id, { onFrame: jest.fn(), onEnd: onEnd });
+      camera.unsubscribe(id);
+      camera.stop();
+      expect(onEnd).not.toHaveBeenCalled();
+    });
+  });
+
   describe("latestFrame()", () => {
     it("returns null before the stream delivered a frame", () => {
       mockSpawn.mockReturnValue(makeMockProcess({}));

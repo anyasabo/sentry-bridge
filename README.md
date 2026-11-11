@@ -197,6 +197,12 @@ These are intentional product decisions, not bugs:
 - Reload the Obico page — the web client does not re-establish the WebRTC session on its own; this is how [Obico's web client](https://github.com/TheSpaghettiDetective/obico-server/blob/release/frontend/src/lib/webrtc.js) behaves with the official agents too
 - The dashboard MJPEG view is not affected
 
+### 6. Obico's "OctoPrint" button shows an error
+
+- Symptom: the button shows error 484 ("Failed to create a new tunnel")
+- The self-hosted Obico server needs a tunnel port range (`OCTOPRINT_TUNNEL_PORT_RANGE`) or subdomain tunnels; `'0-0'` disables tunnels. See [Obico's tunnel guide](https://www.obico.io/docs/server-guides/tunnel/)
+- With tunnels working, the button shows a page that links to the bridge on your LAN — the bridge UI itself is not served through Obico, since it has no login
+
 ## Building from Source
 
 For local development or custom builds:

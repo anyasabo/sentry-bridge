@@ -97,6 +97,16 @@ This guide covers errors with known solutions, drawn from v1.0 and v1.1.0 hardwa
 
 ---
 
+## 6. Obico's "OctoPrint" button shows an error
+
+**Symptom:** Clicking the "OctoPrint" button on Obico's printer control page shows an error (status 484, "Failed to create a new tunnel") instead of a page.
+
+**Cause:** The button opens the agent's web page through an Obico tunnel. The Obico server has no tunnel configured: a self-hosted server needs a port range in `OCTOPRINT_TUNNEL_PORT_RANGE` or subdomain tunnels with wildcard DNS. A range of `'0-0'` disables tunnels.
+
+**Fix:** Configure tunnels on the Obico server as described in [Obico's tunnel guide](https://www.obico.io/docs/server-guides/tunnel/). With tunnels working, the button shows a SentryBridge page with a link to the bridge on your LAN. The bridge UI itself is not served through the tunnel (ADR-0010), because it has no login.
+
+---
+
 ## Not listed here?
 
 If your issue is not covered above, check the [container logs](#3-obico-pairing-never-confirms--wizard-step-3-waits-indefinitely) first, then open an issue at [github.com/reneleban/sentry-bridge](https://github.com/reneleban/sentry-bridge).

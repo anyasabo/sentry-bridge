@@ -3,13 +3,20 @@ export interface CameraConfig {
   frameIntervalSeconds: number;
 }
 
+/** A /stream client: receives frames until the stream ends. */
+export interface FrameSubscriber {
+  onFrame(frame: Buffer): void;
+  /** Fires once when stop() or stopGracefully() ends the stream; the subscription is then removed. */
+  onEnd(): void;
+}
+
 export interface CameraModule {
   start(): void;
   stop(): void;
   /** Graceful ffmpeg teardown: SIGINT, then SIGKILL after timeoutMs. Resolves when proc exits or fallback fires. */
   stopGracefully(timeoutMs: number): Promise<void>;
   onFrame(callback: (frame: Buffer) => void): void;
-  subscribe(id: symbol, callback: (frame: Buffer) => void): void;
+  subscribe(id: symbol, subscriber: FrameSubscriber): void;
   unsubscribe(id: symbol): void;
   testStream(timeoutMs?: number): Promise<Buffer>;
   /** Last frame of the running stream, or null if none is newer than maxAgeMs. */

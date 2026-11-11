@@ -15,6 +15,7 @@ Architecture decisions are recorded as Architecture Decision Records (ADRs) in M
 | [ADR-0007](../decisions/ADR-0007-mit-license.md)              | MIT License for Open-Source Release                                 | Accepted | 2026-04-13 |
 | [ADR-0008](../decisions/ADR-0008-janus-webrtc-relay.md)       | Janus WebRTC Relay for Live Stream in Obico Control Panel           | Accepted | 2026-04-30 |
 | [ADR-0009](../decisions/ADR-0009-frontend-stack.md)           | Frontend Stack — React 19 + Vite + Mantine + react-router + i18next | Accepted | 2026-04-30 |
+| [ADR-0010](../decisions/ADR-0010-obico-tunnel-scope.md)       | Scope of the Obico HTTP Tunnel                                      | Accepted | 2026-11-11 |
 
 ## Decision Process
 

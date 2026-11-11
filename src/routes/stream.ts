@@ -21,13 +21,20 @@ router.get("/stream", (req: Request, res: Response) => {
 
   const id = Symbol("stream-client");
 
-  camera.subscribe(id, (frame: Buffer) => {
-    if (res.writableEnded) return;
-    res.write(
-      `--${BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`
-    );
-    res.write(frame);
-    res.write("\r\n");
+  camera.subscribe(id, {
+    onFrame(frame: Buffer) {
+      if (res.writableEnded) return;
+      res.write(
+        `--${BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`
+      );
+      res.write(frame);
+      res.write("\r\n");
+    },
+    // The camera was stopped or replaced: end the response so the client
+    // reconnects to the current instance instead of waiting forever.
+    onEnd() {
+      res.end();
+    },
   });
 
   req.on("close", () => {

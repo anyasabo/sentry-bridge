@@ -236,6 +236,7 @@ async function applyConfigChange(newConfig: Config): Promise<void> {
       {
         serverUrl: validated.obico.serverUrl,
         apiKey: validated.obico.apiKey,
+        bridgeUrl: getBridgeUrl(validated, currentPort),
         streamUrl: `${getBridgeUrl(validated, currentPort)}/stream`,
         localPort: currentPort,
       },
@@ -305,6 +306,7 @@ export async function reconnectComponent(
       {
         serverUrl: currentConfig.obico.serverUrl,
         apiKey: currentConfig.obico.apiKey,
+        bridgeUrl: getBridgeUrl(currentConfig, currentPort),
         streamUrl: `${getBridgeUrl(currentConfig, currentPort)}/stream`,
         localPort: currentPort,
       },
@@ -329,6 +331,7 @@ export async function reconnectComponent(
       {
         serverUrl: currentConfig.obico.serverUrl,
         apiKey: currentConfig.obico.apiKey,
+        bridgeUrl: getBridgeUrl(currentConfig, currentPort),
         streamUrl: `${getBridgeUrl(currentConfig, currentPort)}/stream`,
         localPort: currentPort,
       },
@@ -483,6 +486,7 @@ export async function startBridge(port = 3000): Promise<void> {
     {
       serverUrl: config.obico.serverUrl,
       apiKey: config.obico.apiKey,
+      bridgeUrl,
       streamUrl: `${bridgeUrl}/stream`,
       localPort: port,
     },
