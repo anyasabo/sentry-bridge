@@ -14,12 +14,7 @@ export enum ErrorSeverity {
 }
 
 export type ComponentName =
-  | "prusalink"
-  | "camera"
-  | "obico_ws"
-  | "janus"
-  | "rtp_stream"
-  | "janus_relay";
+  "prusalink" | "camera" | "obico_ws" | "janus" | "rtp_stream" | "janus_relay";
 
 // Camera stream broken while printer is reachable warrants a restart.
 // PrusaLink DOWN (printer off) and obico_ws DOWN (reconnect handles it) do not.
@@ -49,6 +44,11 @@ export interface HealthMonitor {
     msg: string,
     severity?: ErrorSeverity
   ): void;
+  /** Removes errors of a component, optionally only those matching `match`. */
+  clearErrors(
+    component: ComponentName,
+    match?: (entry: ErrorEntry) => boolean
+  ): void;
   incrementRestarts(component: ComponentName): void;
   getHealth(): Readonly<ComponentHealth>;
   getComponentStats(component: ComponentName): ComponentStats;
@@ -59,6 +59,18 @@ export interface HealthMonitor {
     listener: (e: { component: ComponentName; state: HealthState }) => void
   ): void;
   off(event: "change", listener: (...args: unknown[]) => void): void;
+}
+
+const reportedErrors = new WeakSet<Error>();
+
+/** Marks an error as already pushed to the health monitor by its source. */
+export function markReported<E extends Error>(err: E): E {
+  reportedErrors.add(err);
+  return err;
+}
+
+export function isReported(err: unknown): boolean {
+  return err instanceof Error && reportedErrors.has(err);
 }
 
 export interface HealthMonitorOptions {
@@ -134,6 +146,12 @@ export function createHealthMonitor(opts: HealthMonitorOptions): HealthMonitor {
       if (lastErrors[component].length > MAX_ERRORS) {
         lastErrors[component].shift();
       }
+    },
+
+    clearErrors(component, match) {
+      lastErrors[component] = match
+        ? lastErrors[component].filter((e) => !match(e))
+        : [];
     },
 
     incrementRestarts(component) {

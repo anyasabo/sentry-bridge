@@ -946,6 +946,127 @@ describe("Print passthru commands", () => {
     }, 300);
   });
 
+  // #113: printer control failures are reported back to Obico and the dashboard
+  beforeEach(async () => {
+    (await import("../lib/health")).healthMonitor.clearErrors("prusalink");
+  });
+
+  function sendAndCollect(
+    msg: object,
+    check: (received: string[]) => void | Promise<void>,
+    done: jest.DoneCallback
+  ) {
+    const agent = makeAgent();
+    agent.connect();
+    const received: string[] = [];
+    wss.on("connection", (ws) => {
+      ws.on("message", (data) => received.push(data.toString()));
+      setTimeout(() => ws.send(JSON.stringify(msg)), 50);
+    });
+    setTimeout(async () => {
+      try {
+        await check(received);
+        done();
+      } catch (err) {
+        done(err);
+      } finally {
+        agent.disconnect();
+      }
+    }, 300);
+  }
+
+  const prusalinkErrors = async () =>
+    (await import("../lib/health")).healthMonitor
+      .getComponentStats("prusalink")
+      .lastErrors.map((e) => e.msg);
+
+  it("#113: sends passthru error and shows a WARN when Printer.pause rejects", (done) => {
+    (mockDispatcher.pause as jest.Mock).mockRejectedValueOnce(
+      new Error("409 Conflict")
+    );
+    sendAndCollect(
+      { passthru: { target: "Printer", func: "pause", ref: "C1" } },
+      async (received) => {
+        const ack = received.find((m) => m.includes('"ref":"C1"'));
+        expect(ack).toBeDefined();
+        expect(JSON.parse(ack!).passthru.error).toMatch(/409 Conflict/);
+        expect(await prusalinkErrors()).toContainEqual(
+          expect.stringMatching(/pause failed: 409 Conflict/)
+        );
+      },
+      done
+    );
+  });
+
+  it("#113: sends passthru Success ack when Printer.cancel succeeds", (done) => {
+    sendAndCollect(
+      { passthru: { target: "Printer", func: "cancel", ref: "C2" } },
+      (received) => {
+        const ack = received.find((m) => m.includes('"ref":"C2"'));
+        expect(ack).toBeDefined();
+        expect(JSON.parse(ack!).passthru.ret).toBe("Success");
+      },
+      done
+    );
+  });
+
+  it("#113: shows a WARN when commands[] resume rejects", (done) => {
+    (mockDispatcher.resume as jest.Mock).mockRejectedValueOnce(
+      new Error("offline")
+    );
+    sendAndCollect(
+      { commands: [{ cmd: "resume" }] },
+      async () => {
+        expect(await prusalinkErrors()).toContainEqual(
+          expect.stringMatching(/resume failed: offline/)
+        );
+      },
+      done
+    );
+  });
+
+  it("#113: a later successful command clears the command-failure WARN", (done) => {
+    (mockDispatcher.pause as jest.Mock).mockRejectedValueOnce(
+      new Error("offline")
+    );
+    const agent = makeAgent();
+    agent.connect();
+    wss.on("connection", (ws) => {
+      setTimeout(
+        () => ws.send(JSON.stringify({ commands: [{ cmd: "pause" }] })),
+        50
+      );
+      setTimeout(
+        () => ws.send(JSON.stringify({ commands: [{ cmd: "pause" }] })),
+        150
+      );
+    });
+    setTimeout(async () => {
+      expect(await prusalinkErrors()).not.toContainEqual(
+        expect.stringMatching(/pause failed/)
+      );
+      agent.disconnect();
+      done();
+    }, 300);
+  });
+
+  it("#113: does not add a second WARN for a failure the client already reported", (done) => {
+    import("../lib/health-monitor").then(({ markReported }) => {
+      (mockDispatcher.pause as jest.Mock).mockRejectedValueOnce(
+        markReported(new Error("pause failed: 503"))
+      );
+      sendAndCollect(
+        { commands: [{ cmd: "pause" }] },
+        async () => {
+          expect(await prusalinkErrors()).not.toContainEqual(
+            expect.stringMatching(/pause failed/)
+          );
+        },
+        done
+      );
+    });
+  });
+
   // Test 3 (PRINT-02 args/kwargs Tolerance): kwargs instead of args
   it("PRINT-02: handles kwargs envelope same as args", (done) => {
     const agent = makeAgent();

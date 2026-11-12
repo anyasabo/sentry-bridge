@@ -26,7 +26,12 @@ import {
   encodeTunnelResponse,
   handleTunnelRequest,
 } from "./tunnel";
-import { HealthState, ErrorSeverity } from "../lib/health-monitor";
+import {
+  HealthState,
+  ErrorEntry,
+  ErrorSeverity,
+  isReported,
+} from "../lib/health-monitor";
 
 // A frame upload that hangs would block the next one; Obico reports the
 // status in a short body (e.g. 413), so a prefix is enough for the log.
@@ -328,25 +333,43 @@ export function createObicoAgent(
     }
   }
 
+  const CONTROL_COMMANDS = ["pause", "resume", "cancel"] as const;
+  type ControlCommand = (typeof CONTROL_COMMANDS)[number];
+  const isControlCommand = (v: unknown): v is ControlCommand =>
+    (CONTROL_COMMANDS as readonly unknown[]).includes(v);
+  const isCommandFailure = (e: ErrorEntry) =>
+    CONTROL_COMMANDS.some((c) => e.msg.startsWith(`${c} failed:`));
+
+  // Runs a printer control command. Failures are surfaced on the dashboard
+  // (health WARN) and, when Obico sent a passthru ref, reported back to Obico.
+  async function runControlCommand(
+    cmd: ControlCommand,
+    ref?: string
+  ): Promise<void> {
+    try {
+      await dispatcher[cmd]();
+      healthMonitor.clearErrors("prusalink", isCommandFailure);
+      if (ref) sendPassthruAck(ref, "Success");
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error(`[obico] ${cmd} failed:`, reason);
+      // Transport failures (5xx, timeout, network) are already on the dashboard.
+      if (!isReported(err)) {
+        healthMonitor.pushError(
+          "prusalink",
+          `${cmd} failed: ${reason}`,
+          ErrorSeverity.WARN
+        );
+      }
+      if (ref) sendPassthruError(ref, reason);
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function handleCommands(commands: any[]): void {
     for (const command of commands) {
-      switch (command.cmd) {
-        case "pause":
-          dispatcher
-            .pause()
-            .catch((e) => console.error("[obico] pause failed:", e.message));
-          break;
-        case "resume":
-          dispatcher
-            .resume()
-            .catch((e) => console.error("[obico] resume failed:", e.message));
-          break;
-        case "cancel":
-          dispatcher
-            .cancel()
-            .catch((e) => console.error("[obico] cancel failed:", e.message));
-          break;
+      if (isControlCommand(command.cmd)) {
+        void runControlCommand(command.cmd);
       }
     }
   }
@@ -354,22 +377,8 @@ export function createObicoAgent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function handlePassthru(passthru: any): void {
     if (passthru.target === "Printer") {
-      switch (passthru.func) {
-        case "pause":
-          dispatcher
-            .pause()
-            .catch((e) => console.error("[obico] pause failed:", e.message));
-          break;
-        case "resume":
-          dispatcher
-            .resume()
-            .catch((e) => console.error("[obico] resume failed:", e.message));
-          break;
-        case "cancel":
-          dispatcher
-            .cancel()
-            .catch((e) => console.error("[obico] cancel failed:", e.message));
-          break;
+      if (isControlCommand(passthru.func)) {
+        void runControlCommand(passthru.func, passthru.ref);
       }
       return;
     }
